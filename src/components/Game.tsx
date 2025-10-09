@@ -11,6 +11,13 @@ interface Player {
   color: string;
   score: number;
   lives: number;
+  isAI?: boolean;
+  aiState?: {
+    moveTimer: number;
+    targetX: number;
+    targetY: number;
+    shootTimer: number;
+  };
 }
 
 interface Boomerang {
@@ -35,11 +42,23 @@ export const Game = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<"start" | "playing" | "gameover">("start");
   const [winner, setWinner] = useState<number | null>(null);
+  const mouseRef = useRef({ x: 0, y: 0, canvasX: 0, canvasY: 0 });
   
   const gameStateRef = useRef({
     players: [
-      { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3 },
-      { x: 650, y: 300, vx: 0, vy: 0, radius: 20, color: "#F43F5E", score: 0, lives: 3 },
+      { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, isAI: false },
+      { 
+        x: 650, 
+        y: 300, 
+        vx: 0, 
+        vy: 0, 
+        radius: 20, 
+        color: "#F43F5E", 
+        score: 0, 
+        lives: 3,
+        isAI: true,
+        aiState: { moveTimer: 0, targetX: 650, targetY: 300, shootTimer: 0 }
+      },
     ] as Player[],
     boomerangs: [] as Boomerang[],
     obstacles: [
@@ -51,8 +70,19 @@ export const Game = () => {
   });
 
   const startGame = () => {
-    gameStateRef.current.players[0] = { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3 };
-    gameStateRef.current.players[1] = { x: 650, y: 300, vx: 0, vy: 0, radius: 20, color: "#F43F5E", score: 0, lives: 3 };
+    gameStateRef.current.players[0] = { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, isAI: false };
+    gameStateRef.current.players[1] = { 
+      x: 650, 
+      y: 300, 
+      vx: 0, 
+      vy: 0, 
+      radius: 20, 
+      color: "#F43F5E", 
+      score: 0, 
+      lives: 3,
+      isAI: true,
+      aiState: { moveTimer: 0, targetX: 650, targetY: 300, shootTimer: 0 }
+    };
     gameStateRef.current.boomerangs = [];
     setWinner(null);
     setGameState("playing");
@@ -67,48 +97,47 @@ export const Game = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       gameStateRef.current.keys[e.key.toLowerCase()] = true;
-      
-      if (gameState === "playing") {
-        // Player 1 shoot (Space)
-        if (e.key === " " && gameStateRef.current.boomerangs.filter(b => b.owner === 0 && b.active).length === 0) {
-          const player = gameStateRef.current.players[0];
-          const angle = Math.atan2(300 - player.y, 400 - player.x);
-          gameStateRef.current.boomerangs.push({
-            x: player.x,
-            y: player.y,
-            vx: Math.cos(angle) * 8,
-            vy: Math.sin(angle) * 8,
-            angle: 0,
-            owner: 0,
-            returning: false,
-            active: true,
-          });
-        }
-        
-        // Player 2 shoot (Enter)
-        if (e.key === "Enter" && gameStateRef.current.boomerangs.filter(b => b.owner === 1 && b.active).length === 0) {
-          const player = gameStateRef.current.players[1];
-          const angle = Math.atan2(300 - player.y, 400 - player.x);
-          gameStateRef.current.boomerangs.push({
-            x: player.x,
-            y: player.y,
-            vx: Math.cos(angle) * 8,
-            vy: Math.sin(angle) * 8,
-            angle: 0,
-            owner: 1,
-            returning: false,
-            active: true,
-          });
-        }
-      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       gameStateRef.current.keys[e.key.toLowerCase()] = false;
     };
 
+    const handleMouseMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current.canvasX = e.clientX - rect.left;
+      mouseRef.current.canvasY = e.clientY - rect.top;
+    };
+
+    const handleClick = () => {
+      if (gameState !== "playing") return;
+      
+      const player = gameStateRef.current.players[0];
+      if (gameStateRef.current.boomerangs.filter(b => b.owner === 0 && b.active).length > 0) return;
+
+      const angle = Math.atan2(
+        mouseRef.current.canvasY - player.y,
+        mouseRef.current.canvasX - player.x
+      );
+      
+      gameStateRef.current.boomerangs.push({
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle) * 8,
+        vy: Math.sin(angle) * 8,
+        angle: 0,
+        owner: 0,
+        returning: false,
+        active: true,
+      });
+    };
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    canvasRef.current?.addEventListener("click", handleClick);
 
     const gameLoop = () => {
       if (gameState !== "playing") return;
@@ -125,14 +154,51 @@ export const Game = () => {
       else if (keys["d"]) players[0].vx = speed;
       else players[0].vx *= 0.8;
 
-      // Update player 2 (Arrow keys)
-      if (keys["arrowup"]) players[1].vy = -speed;
-      else if (keys["arrowdown"]) players[1].vy = speed;
-      else players[1].vy *= 0.8;
-      
-      if (keys["arrowleft"]) players[1].vx = -speed;
-      else if (keys["arrowright"]) players[1].vx = speed;
-      else players[1].vx *= 0.8;
+      // AI for robot player
+      const robot = players[1];
+      if (robot.isAI && robot.aiState) {
+        robot.aiState.moveTimer--;
+        robot.aiState.shootTimer--;
+
+        // Pick new random target occasionally
+        if (robot.aiState.moveTimer <= 0) {
+          robot.aiState.targetX = 100 + Math.random() * 600;
+          robot.aiState.targetY = 100 + Math.random() * 400;
+          robot.aiState.moveTimer = 60 + Math.random() * 120;
+        }
+
+        // Move toward target
+        const dx = robot.aiState.targetX - robot.x;
+        const dy = robot.aiState.targetY - robot.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 20) {
+          robot.vx = (dx / dist) * speed * 0.8;
+          robot.vy = (dy / dist) * speed * 0.8;
+        } else {
+          robot.vx *= 0.8;
+          robot.vy *= 0.8;
+        }
+
+        // Try to shoot at player
+        if (robot.aiState.shootTimer <= 0 && boomerangs.filter(b => b.owner === 1 && b.active).length === 0) {
+          const player = players[0];
+          const shootAngle = Math.atan2(player.y - robot.y, player.x - robot.x);
+          
+          boomerangs.push({
+            x: robot.x,
+            y: robot.y,
+            vx: Math.cos(shootAngle) * 8,
+            vy: Math.sin(shootAngle) * 8,
+            angle: 0,
+            owner: 1,
+            returning: false,
+            active: true,
+          });
+          
+          robot.aiState.shootTimer = 80 + Math.random() * 60;
+        }
+      }
 
       // Update player positions
       players.forEach((player) => {
@@ -289,6 +355,8 @@ export const Game = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      canvasRef.current?.removeEventListener("click", handleClick);
     };
   }, [gameState]);
 
@@ -303,14 +371,13 @@ export const Game = () => {
           <h2 className="text-3xl font-bold">Welcome!</h2>
           <div className="space-y-4 text-left">
             <div>
-              <h3 className="text-xl font-bold text-primary mb-2">Player 1 (Purple)</h3>
+              <h3 className="text-xl font-bold text-primary mb-2">You (Purple)</h3>
               <p className="text-muted-foreground">Move: W A S D</p>
-              <p className="text-muted-foreground">Throw: SPACE</p>
+              <p className="text-muted-foreground">Throw: Click Mouse</p>
             </div>
             <div>
-              <h3 className="text-xl font-bold text-accent mb-2">Player 2 (Pink)</h3>
-              <p className="text-muted-foreground">Move: Arrow Keys</p>
-              <p className="text-muted-foreground">Throw: ENTER</p>
+              <h3 className="text-xl font-bold text-accent mb-2">Robot Enemy (Pink)</h3>
+              <p className="text-muted-foreground">AI-controlled opponent</p>
             </div>
           </div>
           <Button onClick={startGame} size="lg" className="text-lg px-8">
@@ -333,9 +400,9 @@ export const Game = () => {
           <h2 className="text-4xl font-bold">Game Over!</h2>
           <p className="text-2xl">
             <span className={winner === 0 ? "text-primary" : "text-accent"}>
-              Player {(winner ?? 0) + 1}
+              {winner === 0 ? "You" : "Robot"}
             </span>{" "}
-            Wins! 🎉
+            {winner === 0 ? "Win! 🎉" : "Wins! 🤖"}
           </p>
           <Button onClick={startGame} size="lg" className="text-lg px-8">
             Play Again
