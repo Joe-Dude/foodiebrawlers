@@ -11,6 +11,7 @@ interface Player {
   color: string;
   score: number;
   lives: number;
+  boomerangs: number;
   isAI?: boolean;
   aiState?: {
     moveTimer: number;
@@ -26,9 +27,10 @@ interface Boomerang {
   vx: number;
   vy: number;
   angle: number;
-  owner: number;
+  owner: number | null;
   returning: boolean;
   active: boolean;
+  dropped: boolean;
 }
 
 interface Obstacle {
@@ -43,21 +45,28 @@ export const Game = () => {
   const [gameState, setGameState] = useState<"start" | "playing" | "gameover">("start");
   const [winner, setWinner] = useState<number | null>(null);
   const mouseRef = useRef({ x: 0, y: 0, canvasX: 0, canvasY: 0 });
+  const cameraRef = useRef({ x: 0, y: 0 });
+  
+  const WORLD_WIDTH = 1600;
+  const WORLD_HEIGHT = 1200;
+  const VIEWPORT_WIDTH = 800;
+  const VIEWPORT_HEIGHT = 600;
   
   const gameStateRef = useRef({
     players: [
-      { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, isAI: false },
+      { x: 200, y: 400, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, boomerangs: 2, isAI: false },
       { 
-        x: 650, 
-        y: 300, 
+        x: 1400, 
+        y: 800, 
         vx: 0, 
         vy: 0, 
         radius: 20, 
         color: "#F43F5E", 
         score: 0, 
         lives: 3,
+        boomerangs: 2,
         isAI: true,
-        aiState: { moveTimer: 0, targetX: 650, targetY: 300, shootTimer: 0 }
+        aiState: { moveTimer: 0, targetX: 1400, targetY: 800, shootTimer: 0 }
       },
     ] as Player[],
     boomerangs: [] as Boomerang[],
@@ -65,23 +74,32 @@ export const Game = () => {
       { x: 350, y: 250, width: 100, height: 100 },
       { x: 200, y: 450, width: 80, height: 80 },
       { x: 520, y: 150, width: 80, height: 80 },
+      { x: 700, y: 400, width: 120, height: 120 },
+      { x: 1100, y: 300, width: 100, height: 100 },
+      { x: 900, y: 700, width: 90, height: 90 },
+      { x: 1300, y: 500, width: 110, height: 110 },
+      { x: 400, y: 800, width: 100, height: 100 },
+      { x: 800, y: 900, width: 80, height: 80 },
+      { x: 1200, y: 150, width: 95, height: 95 },
+      { x: 600, y: 600, width: 85, height: 85 },
     ] as Obstacle[],
     keys: {} as Record<string, boolean>,
   });
 
   const startGame = () => {
-    gameStateRef.current.players[0] = { x: 150, y: 300, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, isAI: false };
+    gameStateRef.current.players[0] = { x: 200, y: 400, vx: 0, vy: 0, radius: 20, color: "#B347E8", score: 0, lives: 3, boomerangs: 2, isAI: false };
     gameStateRef.current.players[1] = { 
-      x: 650, 
-      y: 300, 
+      x: 1400, 
+      y: 800, 
       vx: 0, 
       vy: 0, 
       radius: 20, 
       color: "#F43F5E", 
       score: 0, 
       lives: 3,
+      boomerangs: 2,
       isAI: true,
-      aiState: { moveTimer: 0, targetX: 650, targetY: 300, shootTimer: 0 }
+      aiState: { moveTimer: 0, targetX: 1400, targetY: 800, shootTimer: 0 }
     };
     gameStateRef.current.boomerangs = [];
     setWinner(null);
@@ -115,13 +133,15 @@ export const Game = () => {
       if (gameState !== "playing") return;
       
       const player = gameStateRef.current.players[0];
-      if (gameStateRef.current.boomerangs.filter(b => b.owner === 0 && b.active).length > 0) return;
+      if (player.boomerangs <= 0) return;
 
-      const angle = Math.atan2(
-        mouseRef.current.canvasY - player.y,
-        mouseRef.current.canvasX - player.x
-      );
+      const camera = cameraRef.current;
+      const worldX = mouseRef.current.canvasX + camera.x;
+      const worldY = mouseRef.current.canvasY + camera.y;
+
+      const angle = Math.atan2(worldY - player.y, worldX - player.x);
       
+      player.boomerangs--;
       gameStateRef.current.boomerangs.push({
         x: player.x,
         y: player.y,
@@ -131,6 +151,7 @@ export const Game = () => {
         owner: 0,
         returning: false,
         active: true,
+        dropped: false,
       });
     };
 
@@ -162,8 +183,8 @@ export const Game = () => {
 
         // Pick new random target occasionally
         if (robot.aiState.moveTimer <= 0) {
-          robot.aiState.targetX = 100 + Math.random() * 600;
-          robot.aiState.targetY = 100 + Math.random() * 400;
+          robot.aiState.targetX = 100 + Math.random() * (WORLD_WIDTH - 200);
+          robot.aiState.targetY = 100 + Math.random() * (WORLD_HEIGHT - 200);
           robot.aiState.moveTimer = 60 + Math.random() * 120;
         }
 
@@ -181,10 +202,11 @@ export const Game = () => {
         }
 
         // Try to shoot at player
-        if (robot.aiState.shootTimer <= 0 && boomerangs.filter(b => b.owner === 1 && b.active).length === 0) {
+        if (robot.aiState.shootTimer <= 0 && robot.boomerangs > 0) {
           const player = players[0];
           const shootAngle = Math.atan2(player.y - robot.y, player.x - robot.x);
           
+          robot.boomerangs--;
           boomerangs.push({
             x: robot.x,
             y: robot.y,
@@ -194,10 +216,22 @@ export const Game = () => {
             owner: 1,
             returning: false,
             active: true,
+            dropped: false,
           });
           
           robot.aiState.shootTimer = 80 + Math.random() * 60;
         }
+
+        // AI picks up dropped boomerangs
+        boomerangs.forEach((boom) => {
+          if (boom.dropped && robot.boomerangs < 2) {
+            const dist = Math.sqrt((boom.x - robot.x) ** 2 + (boom.y - robot.y) ** 2);
+            if (dist < robot.radius + 15) {
+              boom.active = false;
+              robot.boomerangs++;
+            }
+          }
+        });
       }
 
       // Update player positions
@@ -207,9 +241,22 @@ export const Game = () => {
 
         // Boundary collision
         if (player.x - player.radius < 0) player.x = player.radius;
-        if (player.x + player.radius > 800) player.x = 800 - player.radius;
+        if (player.x + player.radius > WORLD_WIDTH) player.x = WORLD_WIDTH - player.radius;
         if (player.y - player.radius < 0) player.y = player.radius;
-        if (player.y + player.radius > 600) player.y = 600 - player.radius;
+        if (player.y + player.radius > WORLD_HEIGHT) player.y = WORLD_HEIGHT - player.radius;
+
+        // Pick up dropped boomerangs
+        if (!player.isAI) {
+          boomerangs.forEach((boom) => {
+            if (boom.dropped && player.boomerangs < 2) {
+              const dist = Math.sqrt((boom.x - player.x) ** 2 + (boom.y - player.y) ** 2);
+              if (dist < player.radius + 15) {
+                boom.active = false;
+                player.boomerangs++;
+              }
+            }
+          });
+        }
 
         // Obstacle collision
         obstacles.forEach((obs) => {
@@ -242,67 +289,105 @@ export const Game = () => {
 
       // Update boomerangs
       boomerangs.forEach((boom) => {
-        if (!boom.active) return;
+        if (!boom.active || boom.dropped) return;
 
         boom.x += boom.vx;
         boom.y += boom.vy;
         boom.angle += 0.3;
 
-        const owner = players[boom.owner];
-        const dist = Math.sqrt((boom.x - owner.x) ** 2 + (boom.y - owner.y) ** 2);
+        if (boom.owner !== null) {
+          const owner = players[boom.owner];
+          const dist = Math.sqrt((boom.x - owner.x) ** 2 + (boom.y - owner.y) ** 2);
 
-        // Start returning after traveling distance
-        if (!boom.returning && dist > 200) {
-          boom.returning = true;
-        }
-
-        if (boom.returning) {
-          const angle = Math.atan2(owner.y - boom.y, owner.x - boom.x);
-          boom.vx += Math.cos(angle) * 0.3;
-          boom.vy += Math.sin(angle) * 0.3;
-
-          // Catch boomerang
-          if (dist < owner.radius + 10) {
-            boom.active = false;
-          }
-        }
-
-        // Check collision with other player
-        const otherPlayer = players[1 - boom.owner];
-        const playerDist = Math.sqrt((boom.x - otherPlayer.x) ** 2 + (boom.y - otherPlayer.y) ** 2);
-        
-        if (playerDist < otherPlayer.radius + 10) {
-          boom.active = false;
-          otherPlayer.lives--;
-          owner.score++;
-
-          if (otherPlayer.lives <= 0) {
-            setWinner(boom.owner);
-            setGameState("gameover");
+          // Start returning after traveling distance
+          if (!boom.returning && dist > 250) {
+            boom.returning = true;
           }
 
-          // Reset positions
-          players[0].x = 150;
-          players[0].y = 300;
-          players[1].x = 650;
-          players[1].y = 300;
+          if (boom.returning) {
+            const angle = Math.atan2(owner.y - boom.y, owner.x - boom.x);
+            boom.vx += Math.cos(angle) * 0.3;
+            boom.vy += Math.sin(angle) * 0.3;
+
+            // Catch boomerang
+            if (dist < owner.radius + 15 && owner.boomerangs < 2) {
+              boom.active = false;
+              owner.boomerangs++;
+            } else if (dist < 10 && owner.boomerangs >= 2) {
+              // Drop if inventory full
+              boom.dropped = true;
+              boom.owner = null;
+              boom.vx = 0;
+              boom.vy = 0;
+            }
+          }
+
+          // Check collision with other player
+          const otherPlayerIdx = 1 - boom.owner;
+          const otherPlayer = players[otherPlayerIdx];
+          const playerDist = Math.sqrt((boom.x - otherPlayer.x) ** 2 + (boom.y - otherPlayer.y) ** 2);
+          
+          if (playerDist < otherPlayer.radius + 10) {
+            boom.dropped = true;
+            boom.owner = null;
+            boom.vx = 0;
+            boom.vy = 0;
+            otherPlayer.lives--;
+            owner.score++;
+
+            if (otherPlayer.lives <= 0) {
+              setWinner(boom.owner);
+              setGameState("gameover");
+            }
+
+            // Reset positions
+            players[0].x = 200;
+            players[0].y = 400;
+            players[0].vx = 0;
+            players[0].vy = 0;
+            players[1].x = 1400;
+            players[1].y = 800;
+            players[1].vx = 0;
+            players[1].vy = 0;
+          }
+
+          // Drop if returning too long (failed catch)
+          if (boom.returning && dist > 400) {
+            boom.dropped = true;
+            boom.owner = null;
+            boom.vx = 0;
+            boom.vy = 0;
+          }
         }
 
         // Deactivate if out of bounds
-        if (boom.x < 0 || boom.x > 800 || boom.y < 0 || boom.y > 600) {
+        if (boom.x < 0 || boom.x > WORLD_WIDTH || boom.y < 0 || boom.y > WORLD_HEIGHT) {
           boom.active = false;
         }
       });
 
+      // Update camera to follow player
+      const player = players[0];
+      cameraRef.current.x = player.x - VIEWPORT_WIDTH / 2;
+      cameraRef.current.y = player.y - VIEWPORT_HEIGHT / 2;
+      
+      // Clamp camera to world bounds
+      cameraRef.current.x = Math.max(0, Math.min(WORLD_WIDTH - VIEWPORT_WIDTH, cameraRef.current.x));
+      cameraRef.current.y = Math.max(0, Math.min(WORLD_HEIGHT - VIEWPORT_HEIGHT, cameraRef.current.y));
+
       // Render
-      ctx.clearRect(0, 0, 800, 600);
+      ctx.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
       // Background
-      const gradient = ctx.createLinearGradient(0, 0, 800, 600);
+      const gradient = ctx.createLinearGradient(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
       gradient.addColorStop(0, "#1A1F3A");
       gradient.addColorStop(1, "#2D1B4E");
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 800, 600);
+      ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+
+      // Apply camera transform
+      ctx.save();
+      ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
 
       // Obstacles
       obstacles.forEach((obs) => {
@@ -314,7 +399,7 @@ export const Game = () => {
       });
 
       // Players
-      players.forEach((player, idx) => {
+      players.forEach((player) => {
         ctx.save();
         ctx.shadowBlur = 20;
         ctx.shadowColor = player.color;
@@ -324,25 +409,48 @@ export const Game = () => {
         ctx.fill();
         ctx.restore();
 
-        // Lives
-        ctx.fillStyle = "#fff";
-        ctx.font = "14px sans-serif";
-        ctx.fillText(`P${idx + 1}: ${player.lives}♥`, idx === 0 ? 20 : 720, 30);
+        // Draw boomerangs in hands
+        for (let i = 0; i < player.boomerangs; i++) {
+          const offsetX = i === 0 ? -15 : 15;
+          ctx.save();
+          ctx.translate(player.x + offsetX, player.y);
+          ctx.rotate(Math.PI / 4);
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = "#3DD8FF";
+          ctx.fillStyle = "#3DD8FF";
+          ctx.fillRect(-8, -3, 16, 6);
+          ctx.fillRect(-3, -8, 6, 16);
+          ctx.restore();
+        }
       });
 
-      // Boomerangs
+      // Boomerangs (flying and dropped)
       boomerangs.forEach((boom) => {
         if (!boom.active) return;
         
         ctx.save();
         ctx.translate(boom.x, boom.y);
-        ctx.rotate(boom.angle);
-        ctx.shadowBlur = 15;
+        if (!boom.dropped) {
+          ctx.rotate(boom.angle);
+        }
+        ctx.shadowBlur = boom.dropped ? 5 : 15;
         ctx.shadowColor = "#3DD8FF";
-        ctx.fillStyle = "#3DD8FF";
+        ctx.fillStyle = boom.dropped ? "#2AB8CC" : "#3DD8FF";
+        ctx.globalAlpha = boom.dropped ? 0.7 : 1;
         ctx.fillRect(-15, -5, 30, 10);
         ctx.fillRect(-5, -15, 10, 30);
         ctx.restore();
+      });
+
+      // Reset transform for UI
+      ctx.restore();
+
+      // UI elements (lives and boomerangs count)
+      players.forEach((player, idx) => {
+        ctx.fillStyle = "#fff";
+        ctx.font = "16px sans-serif";
+        const text = `P${idx + 1}: ${player.lives}♥ | ${player.boomerangs}🪃`;
+        ctx.fillText(text, idx === 0 ? 20 : VIEWPORT_WIDTH - 120, 30);
       });
 
       requestAnimationFrame(gameLoop);
@@ -387,12 +495,15 @@ export const Game = () => {
       )}
 
       {gameState === "playing" && (
-        <canvas
-          ref={canvasRef}
-          width={800}
-          height={600}
-          className="border-4 border-primary/30 rounded-lg shadow-2xl shadow-primary/20"
-        />
+        <div className="text-center">
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            className="border-4 border-primary/30 rounded-lg shadow-2xl shadow-primary/20"
+          />
+          <p className="mt-4 text-muted-foreground text-sm">Camera follows you! Explore the larger arena.</p>
+        </div>
       )}
 
       {gameState === "gameover" && (
