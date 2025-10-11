@@ -1,0 +1,1530 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Foodie Brawlers</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
+   <style>
+       body {
+           font-family: 'Fredoka One', cursive;
+           touch-action: none;
+           overflow: hidden;
+           background-color: #f0f4f8; /* Light blue-gray background */
+       }
+       #game-container {
+           width: 100vw;
+           height: 100vh;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+       }
+       canvas {
+           background-color: #ffffff;
+           border-radius: 1rem;
+           box-shadow: 0 10px 20px rgba(0,0,0,0.1), 0 6px 6px rgba(0,0,0,0.1);
+           max-width: 100%;
+           max-height: 100%;
+           aspect-ratio: 16 / 9;
+       }
+       .modal {
+           background-color: rgba(0, 0, 0, 0.6);
+           backdrop-filter: blur(5px);
+       }
+       .button {
+           transition: all 0.2s ease-in-out;
+           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+       }
+       .button:hover {
+           transform: translateY(-2px);
+           box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+       }
+       .button:active {
+           transform: translateY(1px);
+           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+       }
+       /* Styles for selection cards */
+       .select-card {
+           border: 4px solid transparent;
+           border-radius: 0.75rem;
+           padding: 1rem;
+           cursor: pointer;
+           transition: all 0.2s ease-in-out;
+           background-color: #f3f4f6;
+       }
+       .select-card:hover {
+           transform: scale(1.05);
+           border-color: #9ca3af;
+       }
+       .select-card.selected {
+           border-color: #ef4444;
+           background-color: #fee2e2;
+       }
+       .select-btn {
+            border: 2px solid #d1d5db;
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            transition: all 0.2s;
+       }
+       .select-btn.selected {
+           background-color: #3b82f6;
+           color: white;
+           border-color: #3b82f6;
+       }
+   </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen m-0">
+
+
+   <div id="game-container">
+       <canvas id="gameCanvas"></canvas>
+   </div>
+  
+   <!-- Game Over Modal -->
+   <div id="gameOverModal" class="modal fixed inset-0 flex items-center justify-center hidden">
+       <div id="gameOverContent" class="bg-white text-center p-8 rounded-2xl shadow-2xl transform transition-all scale-95 opacity-0">
+           <h2 id="winnerText" class="text-5xl font-bold mb-4 text-gray-800">You Win!</h2>
+           <p id="winnerSubtext" class="text-gray-600 mb-6">You are the ultimate champion!</p>
+           <div class="flex justify-center gap-4">
+               <button id="restartButton" class="button bg-blue-500 text-white font-bold py-3 px-8 rounded-full text-xl hover:bg-blue-600">
+                   Play Again
+               </button>
+               <button id="mainMenuButton" class="button bg-gray-500 text-white font-bold py-3 px-8 rounded-full text-xl hover:bg-gray-600">
+                   Main Menu
+               </button>
+           </div>
+       </div>
+   </div>
+  
+   <!-- Next Round Modal -->
+   <div id="nextRoundModal" class="modal fixed inset-0 flex items-center justify-center hidden">
+       <div class="bg-white text-center p-8 rounded-2xl shadow-2xl w-full max-w-md">
+           <h2 id="nextRoundTitle" class="text-4xl font-bold mb-4 text-gray-800">Round Over!</h2>
+           <div id="scoreDisplay" class="mb-6 space-y-2 text-lg">
+               <!-- Score rows will be inserted here -->
+           </div>
+           <button id="nextRoundButton" class="button bg-green-500 text-white font-bold py-3 px-8 rounded-full text-xl hover:bg-green-600">
+               Next Round
+           </button>
+       </div>
+   </div>
+
+
+   <!-- Start Game Modal -->
+    <div id="startModal" class="modal fixed inset-0 flex items-center justify-center">
+       <div id="startModalContent" class="bg-white text-center p-10 rounded-2xl shadow-2xl max-w-lg">
+           <h1 class="text-6xl font-bold mb-4 text-gray-800">Foodie Brawlers</h1>
+           <p class="text-gray-600 mb-8 text-lg">Dash, dodge, and brawl to become the last foodie standing!</p>
+           <div class="flex justify-center text-left mb-8">
+               <div class="bg-gray-50 p-6 rounded-lg border">
+                   <h3 class="font-bold text-2xl text-pink-500 mb-2">Controls</h3>
+                   <p><kbd class="font-sans bg-gray-200 rounded px-2 py-1">W</kbd> <kbd class="font-sans bg-gray-200 rounded px-2 py-1">A</kbd> <kbd class="font-sans bg-gray-200 rounded px-2 py-1">S</kbd> <kbd class="font-sans bg-gray-200 rounded px-2 py-1">D</kbd> - Move</p>
+                   <p><kbd class="font-sans bg-gray-200 rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
+                   <p><kbd class="font-sans bg-gray-200 rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
+                   <p><kbd class="font-sans bg-gray-200 rounded px-2 py-1">E</kbd> - Dash</p>
+               </div>
+           </div>
+           <button id="startButton" class="button bg-green-500 text-white font-bold py-4 px-10 rounded-full text-2xl hover:bg-green-600">
+               Play
+           </button>
+       </div>
+   </div>
+  
+   <!-- Character Select Modal -->
+   <div id="characterSelectModal" class="modal fixed inset-0 flex items-center justify-center hidden">
+       <div class="bg-white text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full">
+           <h2 class="text-4xl font-bold mb-6 text-gray-800">Game Setup</h2>
+          
+           <div class="grid grid-cols-2 gap-8">
+               <!-- Left Side: Character & Map -->
+               <div>
+                    <!-- Character Selection -->
+                   <h3 class="text-2xl font-bold mb-3 text-gray-700">Choose Your Fighter</h3>
+                   <div id="characterChoices" class="flex justify-center gap-6 mb-6">
+                       <div class="select-card selected" data-char="boba">
+                           <canvas id="boba-preview" width="80" height="80"></canvas>
+                           <p class="font-bold mt-2">Boba</p>
+                       </div>
+                       <div class="select-card" data-char="coffee">
+                           <canvas id="coffee-preview" width="80" height="80"></canvas>
+                           <p class="font-bold mt-2">Coffee</p>
+                       </div>
+                       <div class="select-card" data-char="juice">
+                           <canvas id="juice-preview" width="80" height="80"></canvas>
+                           <p class="font-bold mt-2">Juice Box</p>
+                       </div>
+                   </div>
+                    <!-- Map Selection -->
+                   <h3 class="text-2xl font-bold mb-3 text-gray-700">Choose Your Arena</h3>
+                   <div id="mapChoices" class="flex justify-center gap-4">
+                       <button class="select-btn selected" data-map="classic">Classic</button>
+                       <button class="select-btn" data-map="pillars">Pillars</button>
+                       <button class="select-btn" data-map="open">Open Field</button>
+                   </div>
+               </div>
+
+
+               <!-- Right Side: Mode & Bots -->
+               <div class="bg-gray-50 p-6 rounded-lg">
+                   <h3 class="text-2xl font-bold mb-4 text-gray-700">Game Rules</h3>
+                   <div class="grid grid-cols-2 gap-6 mb-4">
+                        <div>
+                           <h4 class="text-xl font-bold mb-2 text-gray-600">Game Mode</h4>
+                           <div class="flex justify-center gap-2">
+                               <button id="solosBtn" class="select-btn selected" data-mode="solos">Solos</button>
+                               <button id="teamsBtn" class="select-btn" data-mode="teams">Teams</button>
+                           </div>
+                       </div>
+                       <div>
+                          <h4 class="text-xl font-bold mb-2 text-gray-600">Total Brawlers</h4>
+                           <div id="botCountChoices" class="flex items-center justify-center gap-4">
+                               <button id="botsMinus" class="text-xl font-bold bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center">-</button>
+                               <span id="botsCount" class="text-2xl font-bold w-10">2</span>
+                               <button id="botsPlus" class="text-xl font-bold bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center">+</button>
+                           </div>
+                           <p id="botCountDescription" class="text-sm text-gray-500 mt-1">Free-For-All</p>
+                       </div>
+                   </div>
+                   <div>
+                       <h4 class="text-xl font-bold mb-2 text-gray-600">Bot Difficulty</h4>
+                       <div id="difficultyChoices" class="flex justify-center gap-2">
+                           <button class="select-btn" data-diff="easy">Easy</button>
+                           <button class="select-btn selected" data-diff="medium">Medium</button>
+                           <button class="select-btn" data-diff="hard">Hard</button>
+                       </div>
+                   </div>
+               </div>
+           </div>
+          
+           <!-- Start Button -->
+           <button id="brawlButton" class="button bg-red-500 text-white font-bold py-4 px-12 rounded-full text-2xl hover:bg-red-600 mt-8">
+               Brawl!
+           </button>
+       </div>
+   </div>
+
+
+
+
+<script>
+   const canvas = document.getElementById('gameCanvas');
+   let ctx = canvas.getContext('2d');
+  
+   // --- UI Elements ---
+   const startModal = document.getElementById('startModal');
+   const startButton = document.getElementById('startButton');
+   const gameOverModal = document.getElementById('gameOverModal');
+   const gameOverContent = document.getElementById('gameOverContent');
+   const winnerText = document.getElementById('winnerText');
+   const winnerSubtext = document.getElementById('winnerSubtext');
+   const restartButton = document.getElementById('restartButton');
+   const mainMenuButton = document.getElementById('mainMenuButton');
+   const nextRoundModal = document.getElementById('nextRoundModal');
+   const nextRoundButton = document.getElementById('nextRoundButton');
+   const nextRoundTitle = document.getElementById('nextRoundTitle');
+   const scoreDisplay = document.getElementById('scoreDisplay');
+  
+   // Character Select UI
+   const characterSelectModal = document.getElementById('characterSelectModal');
+   const characterChoices = document.getElementById('characterChoices');
+   const solosBtn = document.getElementById('solosBtn');
+   const teamsBtn = document.getElementById('teamsBtn');
+   const botsMinus = document.getElementById('botsMinus');
+   const botsPlus = document.getElementById('botsPlus');
+   const botsCount = document.getElementById('botsCount');
+   const botCountDescription = document.getElementById('botCountDescription');
+   const brawlButton = document.getElementById('brawlButton');
+   const mapChoices = document.getElementById('mapChoices');
+   const difficultyChoices = document.getElementById('difficultyChoices');
+
+
+
+
+   // --- Game constants ---
+   const BASE_WIDTH = 1280;
+   const BASE_HEIGHT = 720;
+   const PLAYER_SIZE = 30;
+   const PLAYER_SPEED = 3.5;
+   const DASH_SPEED = 18;
+   const DASH_DURATION = 120; // in ms
+   const BOOMERANG_SIZE = 25;
+   const BOOMERANG_SPEED = 7;
+   const BOOMERANG_RANGE = 250;
+   const MELEE_RANGE = 45;
+   const MELEE_DURATION = 150; // ms
+   const MELEE_COOLDOWN = 400; // ms
+   const WIN_SCORE = 3;
+   const CHARACTER_TYPES = ['boba', 'coffee', 'juice'];
+  
+   const MAPS = {
+       classic: [
+           {x: 200, y: 150, w: 150, h: 40}, {x: 1280 - 350, y: 150, w: 150, h: 40},
+           {x: 200, y: 720 - 190, w: 150, h: 40}, {x: 1280 - 350, y: 720 - 190, w: 150, h: 40},
+           {x: 1280 / 2 - 100, y: 720 / 2 - 20, w: 200, h: 40},
+           {x: 500, y: 300, w: 40, h: 120}, {x: 1280 - 540, y: 300, w: 40, h: 120},
+       ],
+       pillars: [
+           {x: 250, y: 200, w: 50, h: 50}, {x: 1280 - 300, y: 200, w: 50, h: 50},
+           {x: 250, y: 720 - 250, w: 50, h: 50}, {x: 1280 - 300, y: 720 - 250, w: 50, h: 50},
+           {x: 615, y: 150, w: 50, h: 150}, {x: 615, y: 720 - 300, w: 50, h: 150},
+       ],
+       open: []
+   };
+  
+   const SPAWN_POINTS = [
+       {x: 150, y: 150},
+       {x: BASE_WIDTH - 150, y: BASE_HEIGHT - 150},
+       {x: 150, y: BASE_HEIGHT - 150},
+       {x: BASE_WIDTH - 150, y: 150}
+   ];
+
+
+
+
+   // --- Game State ---
+   let players = [];
+   let boomerangs = [];
+   let obstacles = [];
+   let particles = [];
+   let matchScores = [];
+   let isGameOver = true;
+   let isRoundOver = false;
+  
+   // Game Settings
+   let selectedCharacterType = 'boba';
+   let selectedGameMode = 'solos';
+   let totalBrawlers = 2;
+   let selectedDifficulty = 'medium';
+   let selectedMap = 'classic';
+   let playerInfo = []; // To store name/color info between rounds
+
+
+   const keys = {};
+   let mousePos = { x: 0, y: 0 };
+
+
+   // --- Input Handling ---
+   window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+   window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  
+   function getMousePos(canvas, evt) {
+       const rect = canvas.getBoundingClientRect();
+       const scaleX = canvas.width / rect.width;
+       const scaleY = canvas.height / rect.height;
+       // Adjust for canvas scaling
+       const baseWidth = 1280;
+       const viewScale = canvas.width / baseWidth;
+
+
+       return {
+           x: (evt.clientX - rect.left) * scaleX / viewScale,
+           y: (evt.clientY - rect.top) * scaleY / viewScale
+       };
+   }
+
+
+   window.addEventListener('mousemove', (e) => {
+       mousePos = getMousePos(canvas, e);
+   });
+
+
+   window.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent context menu
+  
+   window.addEventListener('mousedown', (e) => {
+       if (isGameOver || isRoundOver || !players.length) return;
+       const player = players.find(p => !p.isBot);
+       if (!player) return;
+      
+       // Left Click: Throw
+       if (e.button === 0) {
+           if (player.boomerangCount > 0) {
+               player.boomerangCount--;
+               const centerX = player.x + player.width / 2;
+               const centerY = player.y + player.height / 2;
+               const dirX = mousePos.x - centerX;
+               const dirY = mousePos.y - centerY;
+               const magnitude = Math.hypot(dirX, dirY);
+              
+               const normDx = magnitude > 0 ? dirX / magnitude : 1;
+               const normDy = magnitude > 0 ? dirY / magnitude : 0;
+
+
+               boomerangs.push(new Boomerang(centerX, centerY, normDx, normDy, player));
+           }
+       }
+      
+       // Right Click: Hit
+       if (e.button === 2) {
+           player.performHit();
+       }
+   });
+
+
+
+
+   // --- Utility Functions ---
+   function getRandom(min, max) {
+       return Math.random() * (max - min) + min;
+   }
+  
+   function shuffleArray(array) {
+       for (let i = array.length - 1; i > 0; i--) {
+           const j = Math.floor(Math.random() * (i + 1));
+           [array[i], array[j]] = [array[j], array[i]];
+       }
+   }
+
+
+   function resizeCanvas() {
+       const container = document.getElementById('game-container');
+       const { width, height } = container.getBoundingClientRect();
+      
+       const aspectRatio = 16 / 9;
+       let newWidth = width;
+       let newHeight = width / aspectRatio;
+
+
+       if (newHeight > height) {
+           newHeight = height;
+           newWidth = height * aspectRatio;
+       }
+
+
+       canvas.width = newWidth;
+       canvas.height = newHeight;
+
+
+       // Scale everything based on a base resolution
+       const baseWidth = 1280;
+       const scale = canvas.width / baseWidth;
+       ctx.scale(scale, scale);
+   }
+
+
+   // --- Game Object Classes ---
+   class Player {
+       constructor(x, y, color, controls, name, characterType, team, playerNumber, isBot = false, difficulty = 'medium') {
+           this.x = x;
+           this.y = y;
+           this.name = name;
+           this.isBot = isBot;
+           this.characterType = characterType;
+           this.width = PLAYER_SIZE;
+           this.height = PLAYER_SIZE;
+           this.color = color;
+           this.controls = controls;
+           this.boomerangCount = 1;
+           this.isDashing = false;
+           this.dashTimer = 0;
+           this.dx = 0; // dash direction x
+           this.dy = 0; // dash direction y
+           this.stunTimer = 0;
+           this.lastMoveDir = { x: 1, y: 0 };
+           this.lastAimDir = { x: 1, y: 0 };
+           this.team = team;
+           this.playerNumber = playerNumber;
+           this.isEliminated = false;
+          
+           // Melee properties
+           this.isHitting = false;
+           this.hitTimer = 0;
+
+
+           // Bot specific
+           this.botStateTimer = 0;
+           this.botMoveTarget = {x: 0, y: 0};
+           this.difficulty = difficulty;
+          
+           // Apply difficulty settings
+           this.speed = isBot ? PLAYER_SPEED * (this.difficulty === 'easy' ? 0.75 : this.difficulty === 'hard' ? 1.0 : 0.85) : PLAYER_SPEED;
+           this.hitCooldown = 0;
+           this.botThrowChance = (this.difficulty === 'easy' ? 0.008 : this.difficulty === 'hard' ? 0.02 : 0.015);
+
+
+       }
+
+
+       update() {
+           if(this.isEliminated) return;
+           // Timers
+           if (this.hitTimer > 0) this.hitTimer -= 1000/60;
+           if (this.hitCooldown > 0) this.hitCooldown -= 1000/60;
+           if (this.hitTimer <= 0) this.isHitting = false;
+
+
+           if (this.isBot) {
+               this.handleBotAI();
+           } else {
+               this.handlePlayerInput();
+           }
+       }
+
+
+       performHit() {
+           const meleeCooldown = this.isBot ? (this.difficulty === 'hard' ? 300 : MELEE_COOLDOWN) : MELEE_COOLDOWN;
+           if (this.hitCooldown <= 0 && !this.isDashing && this.stunTimer <= 0) {
+               this.isHitting = true;
+               this.hitTimer = MELEE_DURATION;
+               this.hitCooldown = meleeCooldown;
+           }
+       }
+
+
+       handlePlayerInput() {
+           if (this.stunTimer > 0) {
+               this.stunTimer -= 1000 / 60; // Assuming 60fps
+               if(this.stunTimer <=0) this.isEliminated = true;
+               return;
+           }
+
+
+           if (this.isDashing) {
+               this.x += this.dx * DASH_SPEED;
+               this.y += this.dy * DASH_SPEED;
+               this.dashTimer -= 1000 / 60;
+               if (this.dashTimer <= 0) {
+                   this.isDashing = false;
+               }
+               createParticle(this.x + this.width / 2, this.y + this.height / 2, this.color, 10, 0.9, 2);
+           } else if (!this.isHitting) { // Can't move while hitting
+               this.handleMovement();
+           }
+
+
+           this.handleDash();
+           this.checkBoundaries();
+           this.checkObstacleCollision();
+       }
+
+
+       handleBotAI() {
+            if (this.stunTimer > 0) {
+               this.stunTimer -= 1000 / 60;
+               if(this.stunTimer <=0) this.isEliminated = true;
+               return;
+           }
+          
+           // --- BOT AI DECISION MAKING ---
+
+
+           // 1. Find nearest dropped boomerang if needed
+           let boomerangTarget = null;
+           if (this.boomerangCount < 2) {
+               let closestBoomerangDist = Infinity;
+               boomerangs.filter(b => b.isDropped).forEach(b => {
+                   const dist = Math.hypot(this.x - b.x, this.y - b.y);
+                   if (dist < closestBoomerangDist) {
+                       closestBoomerangDist = dist;
+                       boomerangTarget = b;
+                   }
+               });
+           }
+
+
+           // 2. Find nearest enemy
+           let enemyTarget = null;
+           let closestEnemyDist = Infinity;
+           players.filter(p => p.team !== this.team && !p.isEliminated).forEach(opponent => {
+               const dist = Math.hypot(this.x - opponent.x, this.y - opponent.y);
+               if (dist < closestEnemyDist) {
+                   closestEnemyDist = dist;
+                   enemyTarget = opponent;
+               }
+           });
+           if (!enemyTarget) return; // No targets, do nothing
+
+
+           // 3. Decide primary target for movement
+           let finalTarget = enemyTarget;
+           if (boomerangTarget && this.boomerangCount === 0) {
+               finalTarget = boomerangTarget;
+           } else if (boomerangTarget && this.boomerangCount === 1 && closestEnemyDist > 300) {
+                if (this.difficulty !== 'easy') finalTarget = boomerangTarget;
+           }
+
+
+           const distX = finalTarget.x - this.x;
+           const distY = finalTarget.y - this.y;
+           const distance = Math.hypot(distX, distY);
+
+
+           // Always aim at the enemy, regardless of movement target
+           if (enemyTarget) {
+               const aimDistX = enemyTarget.x - this.x;
+               const aimDistY = enemyTarget.y - this.y;
+               const aimDist = Math.hypot(aimDistX, aimDistY);
+               if(aimDist > 0) {
+                   this.lastAimDir = { x: aimDistX / aimDist, y: aimDistY / aimDist };
+               }
+           }
+          
+           // Melee logic for Bot (based on enemy distance)
+           if(closestEnemyDist < MELEE_RANGE * 1.5) {
+               this.performHit();
+           }
+
+
+           // --- BOT MOVEMENT ---
+           if (finalTarget === boomerangTarget) {
+               // Just move towards the boomerang
+               if (distance > 0) {
+                   this.botMoveTarget = {x: (distX/distance), y: (distY/distance)};
+               }
+           } else {
+               // Existing state machine for moving relative to an enemy
+               this.botStateTimer -= 1000 / 60;
+               if (this.botStateTimer <= 0) {
+                   this.botStateTimer = getRandom(500, 1500); // Change behavior
+                   const action = Math.random();
+                   if (distance > 0) {
+                       if (action < 0.6) { // Chase/Flee
+                           this.botMoveTarget = {x: (distX/distance), y: (distY/distance)};
+                           if (distance < (this.difficulty === 'hard' ? 250 : 200) && this.boomerangCount === 0) { // Flee if too close and unarmed
+                               this.botMoveTarget = {x: -this.botMoveTarget.x, y: -this.botMoveTarget.y};
+                           }
+                       } else { // Strafe
+                           this.botMoveTarget = {x: (distY/distance), y: -(distX/distance)};
+                           if (Math.random() < 0.5) { // Reverse strafe
+                               this.botMoveTarget = {x: -this.botMoveTarget.x, y: -this.botMoveTarget.y};
+                           }
+                       }
+                   }
+               }
+           }
+          
+           if (!this.isHitting) {
+               const moveX = this.botMoveTarget.x;
+               const moveY = this.botMoveTarget.y;
+               const magnitude = Math.hypot(moveX, moveY);
+               if(magnitude > 0) {
+                   const newX = this.x + (moveX / magnitude) * this.speed;
+                   const newY = this.y + (moveY / magnitude) * this.speed;
+                   if (!this.isCollidingWithObstacle(newX, newY)) {
+                       this.x = newX;
+                       this.y = newY;
+                   } else {
+                       this.botStateTimer = 0; // if stuck, change direction
+                   }
+                   this.lastMoveDir = { x: moveX / magnitude, y: moveY / magnitude };
+               }
+           }
+
+
+           // Throwing Logic
+           if (this.boomerangCount > 0 && closestEnemyDist < 500 && closestEnemyDist > 100 && Math.random() < this.botThrowChance) {
+               this.boomerangCount--;
+               boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, this.lastAimDir.x, this.lastAimDir.y, this));
+           }
+
+
+           this.checkBoundaries();
+           this.checkObstacleCollision();
+       }
+
+
+       isCollidingWithObstacle(x, y) {
+           for (const obstacle of obstacles) {
+               if (
+                   x < obstacle.x + obstacle.width &&
+                   x + this.width > obstacle.x &&
+                   y < obstacle.y + obstacle.height &&
+                   y + this.height > obstacle.y
+               ) {
+                   return true;
+               }
+           }
+           return false;
+       }
+
+
+       handleMovement() {
+           let moveX = 0;
+           let moveY = 0;
+
+
+           if (keys[this.controls.up]) moveY -= 1;
+           if (keys[this.controls.down]) moveY += 1;
+           if (keys[this.controls.left]) moveX -= 1;
+           if (keys[this.controls.right]) moveX += 1;
+
+
+           if (moveX !== 0 || moveY !== 0) {
+               const magnitude = Math.sqrt(moveX * moveX + moveY * moveY);
+               this.x += (moveX / magnitude) * this.speed;
+               this.y += (moveY / magnitude) * this.speed;
+               this.lastMoveDir = { x: moveX / magnitude, y: moveY / magnitude };
+           }
+       }
+
+
+       handleDash() {
+           if (keys[this.controls.dash] && !this.isDashing && !this.isHitting) {
+               this.isDashing = true;
+               this.dashTimer = DASH_DURATION;
+               this.dx = this.lastMoveDir.x;
+               this.dy = this.lastMoveDir.y;
+           }
+       }
+
+
+       checkBoundaries() {
+           if (this.x < 0) this.x = 0;
+           if (this.x + this.width > BASE_WIDTH) this.x = BASE_WIDTH - this.width;
+           if (this.y < 0) this.y = 0;
+           if (this.y + this.height > BASE_HEIGHT) this.y = BASE_HEIGHT - this.height;
+       }
+      
+       checkObstacleCollision() {
+           obstacles.forEach(obstacle => {
+               if (
+                   this.x < obstacle.x + obstacle.width &&
+                   this.x + this.width > obstacle.x &&
+                   this.y < obstacle.y + obstacle.height &&
+                   this.y + this.height > obstacle.y
+               ) {
+                   // Simple push-out logic
+                   const overlapX = (this.x + this.width / 2) - (obstacle.x + obstacle.width / 2);
+                   const overlapY = (this.y + this.height / 2) - (obstacle.y + obstacle.height / 2);
+                   const combinedHalfWidths = this.width / 2 + obstacle.width / 2;
+                   const combinedHalfHeights = this.height / 2 + obstacle.height / 2;
+
+
+                   if (Math.abs(overlapX) < combinedHalfWidths && Math.abs(overlapY) < combinedHalfHeights) {
+                       const overlapXAmount = combinedHalfWidths - Math.abs(overlapX);
+                       const overlapYAmount = combinedHalfHeights - Math.abs(overlapY);
+
+
+                       if (overlapXAmount < overlapYAmount) {
+                           this.x += overlapX > 0 ? overlapXAmount : -overlapXAmount;
+                       } else {
+                           this.y += overlapY > 0 ? overlapYAmount : -overlapYAmount;
+                       }
+                   }
+               }
+           });
+       }
+
+
+       // --- CHARACTER DRAWING ---
+      
+       drawBoba(preview = false) {
+           const x = preview ? 0 : this.x;
+           const y = preview ? 0 : this.y;
+           // Boba tea cup shape
+           ctx.beginPath();
+           ctx.moveTo(x, y + this.height);
+           ctx.lineTo(x + this.width, y + this.height);
+           ctx.lineTo(x + this.width * 0.9, y);
+           ctx.lineTo(x + this.width * 0.1, y);
+           ctx.closePath();
+           ctx.fill();
+
+
+           // Lid
+           ctx.fillStyle = '#d1d5db'; // gray-300
+           ctx.fillRect(x, y - 5, this.width, 5);
+          
+           // Boba pearls
+           ctx.fillStyle = 'rgba(0,0,0,0.6)';
+           ctx.beginPath();
+           ctx.arc(x + this.width * 0.3, y + this.height * 0.8, 3, 0, Math.PI * 2);
+           ctx.arc(x + this.width * 0.6, y + this.height * 0.85, 3.5, 0, Math.PI * 2);
+           ctx.arc(x + this.width * 0.45, y + this.height * 0.7, 2.5, 0, Math.PI * 2);
+           ctx.fill();
+       }
+
+
+       drawCoffee(preview = false) {
+           const x = preview ? 0 : this.x;
+           const y = preview ? 0 : this.y;
+           // Coffee cup shape
+           ctx.fillStyle = '#8d6e63'; // Brown for coffee
+           ctx.beginPath();
+           ctx.moveTo(x, y + this.height);
+           ctx.lineTo(x + this.width, y + this.height);
+           ctx.lineTo(x + this.width * 0.9, y);
+           ctx.lineTo(x + this.width * 0.1, y);
+           ctx.closePath();
+           ctx.fill();
+
+
+           // Sleeve
+           ctx.fillStyle = '#a1887f'; // Lighter brown for sleeve
+           ctx.fillRect(x, y + this.height * 0.3, this.width, this.height * 0.4);
+
+
+           // Lid
+           ctx.fillStyle = '#ffffff'; // white
+           ctx.fillRect(x, y - 5, this.width, 5);
+       }
+
+
+       drawJuiceBox(preview = false) {
+           const x = preview ? 0 : this.x;
+           const y = preview ? 0 : this.y;
+           // Juice box shape
+           ctx.fillStyle = '#ffb74d'; // Orange for juice box
+           ctx.fillRect(x, y, this.width, this.height);
+          
+           // Straw
+           ctx.strokeStyle = '#fdd835'; // Yellow
+           ctx.lineWidth = 4;
+           ctx.beginPath();
+           ctx.moveTo(x + this.width * 0.7, y);
+           ctx.lineTo(x + this.width * 0.7, y - 10);
+           ctx.lineTo(x + this.width * 0.8, y - 15);
+           ctx.stroke();
+
+
+           // Label
+           ctx.fillStyle = 'white';
+           ctx.fillRect(x + 5, y + 5, this.width - 10, this.height - 10);
+           ctx.fillStyle = '#e53935';
+           ctx.beginPath();
+           ctx.arc(x + this.width/2, y + this.height/2, 5, 0, Math.PI*2);
+           ctx.fill();
+       }
+
+
+       draw(preview = false) {
+           const x = preview ? 0 : this.x;
+           const y = preview ? 0 : this.y;
+
+
+           ctx.save();
+           ctx.fillStyle = this.color;
+           if (this.stunTimer > 0) {
+               ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 50) * 0.2;
+           } else if (this.isEliminated) {
+               ctx.globalAlpha = 0.4;
+           }
+          
+           // Melee Lunge Animation
+           if (this.isHitting && !preview) {
+               const hitProgress = 1 - (this.hitTimer / MELEE_DURATION);
+               // A sine wave makes the lunge smooth: out and back in
+               const lungeDistance = Math.sin(hitProgress * Math.PI) * 15;
+               const lungeX = this.lastAimDir.x * lungeDistance;
+               const lungeY = this.lastAimDir.y * lungeDistance;
+               ctx.translate(lungeX, lungeY);
+           }
+
+
+           // Update aim direction for player based on mouse
+           if (!this.isBot && !preview) {
+               const aimX = mousePos.x - (this.x + this.width / 2);
+               const aimY = mousePos.y - (this.y + this.height / 2);
+               const mag = Math.hypot(aimX, aimY);
+               if (mag > 0) {
+                   this.lastAimDir.x = aimX / mag;
+                   this.lastAimDir.y = aimY / mag;
+               }
+           }
+
+
+           // --- Draw the character based on its type ---
+           switch(this.characterType) {
+               case 'boba':
+                   this.drawBoba(preview);
+                   break;
+               case 'coffee':
+                   this.drawCoffee(preview);
+                   break;
+               case 'juice':
+                   this.drawJuiceBox(preview);
+                   break;
+           }
+
+
+           // Draw Held Boomerang
+           if (this.boomerangCount > 0 && !preview) {
+               const centerX = this.x + this.width / 2;
+               const centerY = this.y + this.height / 2;
+               const angle = Math.atan2(this.lastAimDir.y, this.lastAimDir.x);
+              
+               ctx.save();
+               ctx.translate(centerX, centerY);
+               ctx.rotate(angle);
+              
+               ctx.strokeStyle = this.color;
+               ctx.lineWidth = 4;
+               ctx.shadowColor = this.color;
+               ctx.shadowBlur = 8;
+              
+               // Draw first boomerang
+               const boomerangX1 = this.width / 2 - 2;
+               const boomerangY1 = this.boomerangCount > 1 ? -BOOMERANG_SIZE / 4 : 0; // Offset if holding two
+               ctx.beginPath();
+               ctx.arc(boomerangX1, boomerangY1, BOOMERANG_SIZE / 3, Math.PI * 0.25, Math.PI * 1.75);
+               ctx.stroke();
+              
+               // Draw second boomerang if held
+               if (this.boomerangCount > 1) {
+                   const boomerangX2 = this.width / 2 - 2;
+                   const boomerangY2 = BOOMERANG_SIZE / 4;
+                   ctx.beginPath();
+                   ctx.arc(boomerangX2, boomerangY2, BOOMERANG_SIZE / 3, Math.PI * 0.25, Math.PI * 1.75);
+                   ctx.stroke();
+               }
+              
+               ctx.restore();
+           }
+
+
+           // Eyes are drawn on top of the body
+           ctx.fillStyle = 'white';
+           const eyeX1 = x + this.width * 0.3;
+           const eyeX2 = x + this.width * 0.7;
+           const eyeY = y + this.height * 0.4;
+           ctx.beginPath();
+           ctx.arc(eyeX1, eyeY, 4, 0, Math.PI * 2);
+           ctx.arc(eyeX2, eyeY, 4, 0, Math.PI * 2);
+           ctx.fill();
+
+
+           // Pupils
+           ctx.fillStyle = 'black';
+           const pupilX1 = eyeX1 + this.lastAimDir.x * 1.5;
+           const pupilY1 = eyeY + this.lastAimDir.y * 1.5;
+           const pupilX2 = eyeX2 + this.lastAimDir.x * 1.5;
+           const pupilY2 = eyeY + this.lastAimDir.y * 1.5;
+           ctx.beginPath();
+           ctx.arc(pupilX1, pupilY1, 2, 0, Math.PI * 2);
+           ctx.arc(pupilX2, pupilY2, 2, 0, Math.PI * 2);
+           ctx.fill();
+
+
+           // Draw Player Number
+           if (!preview) {
+               ctx.save();
+               ctx.font = "bold 16px 'Fredoka One'";
+               ctx.textAlign = 'center';
+               ctx.strokeStyle = 'black';
+               ctx.lineWidth = 3;
+               ctx.strokeText(this.playerNumber, this.x + this.width / 2, this.y - 8);
+               ctx.fillStyle = 'white';
+               ctx.fillText(this.playerNumber, this.x + this.width / 2, this.y - 8);
+               ctx.restore();
+           }
+
+
+           // Draw Melee Hit Visual Effect
+           if (this.isHitting && !preview) {
+               const centerX = this.x + this.width / 2;
+               const centerY = this.y + this.height / 2;
+               const angle = Math.atan2(this.lastAimDir.y, this.lastAimDir.x);
+               const hitProgress = 1 - (this.hitTimer / MELEE_DURATION);
+              
+               ctx.save();
+               ctx.globalAlpha = 0.8 * (1 - hitProgress);
+               ctx.strokeStyle = "white";
+               ctx.lineWidth = 4;
+               ctx.beginPath();
+               ctx.arc(centerX, centerY, MELEE_RANGE * 0.8, angle - Math.PI/3, angle + Math.PI/3);
+               ctx.stroke();
+               ctx.restore();
+           }
+
+
+           ctx.restore();
+       }
+   }
+  
+   class Boomerang {
+       constructor(x, y, dx, dy, owner) {
+           this.x = x;
+           this.y = y;
+           this.dx = dx;
+           this.dy = dy;
+           this.owner = owner;
+           this.size = BOOMERANG_SIZE;
+           this.rotation = 0;
+           this.distanceTraveled = 0;
+           this.isReturning = false;
+           this.isDropped = false;
+           this.isPickedUp = false;
+       }
+
+
+       update() {
+           if (this.isDropped) return true; // Keep it in the world but don't update its movement
+
+
+           if (this.isReturning) {
+               const dirX = this.owner.x + this.owner.width / 2 - this.x;
+               const dirY = this.owner.y + this.owner.height / 2 - this.y;
+               const magnitude = Math.sqrt(dirX * dirX + dirY * dirY);
+
+
+               if (magnitude < this.size) {
+                   if(!this.owner.isEliminated && this.owner.boomerangCount < 2) this.owner.boomerangCount++;
+                   // Remove this boomerang from the array
+                   return false;
+               }
+               if (magnitude > 0) {
+                   this.dx = dirX / magnitude;
+                   this.dy = dirY / magnitude;
+               }
+           } else {
+               this.distanceTraveled += BOOMERANG_SPEED;
+               if (this.distanceTraveled >= BOOMERANG_RANGE) {
+                   this.isReturning = true;
+               }
+           }
+
+
+           this.x += this.dx * BOOMERANG_SPEED;
+           this.y += this.dy * BOOMERANG_SPEED;
+           this.rotation += 0.3;
+          
+           // Boundary checks
+           if (this.x - this.size/2 < 0) { this.x = this.size/2; this.dx *= -1; this.isReturning = true; }
+           if (this.x + this.size/2 > BASE_WIDTH) { this.x = BASE_WIDTH - this.size/2; this.dx *= -1; this.isReturning = true; }
+           if (this.y - this.size/2 < 0) { this.y = this.size/2; this.dy *= -1; this.isReturning = true; }
+           if (this.y + this.size/2 > BASE_HEIGHT) { this.y = BASE_HEIGHT - this.size/2; this.dy *= -1; this.isReturning = true; }
+
+
+           // Obstacle checks
+           obstacles.forEach(obstacle => {
+               if (
+                   this.x + this.size/2 > obstacle.x &&
+                   this.x - this.size/2 < obstacle.x + obstacle.width &&
+                   this.y + this.size/2 > obstacle.y &&
+                   this.y - this.size/2 < obstacle.y + obstacle.height
+               ) {
+                   if (this.isReturning) {
+                       this.isDropped = true;
+                   } else {
+                       // Bounce physics
+                       const prevX = this.x - this.dx * BOOMERANG_SPEED;
+                       const prevY = this.y - this.dy * BOOMERANG_SPEED;
+                      
+                       // Check for horizontal collision
+                       if (prevX + this.size/2 <= obstacle.x || prevX - this.size/2 >= obstacle.x + obstacle.width) {
+                            this.dx *= -1;
+                       }
+                       // Check for vertical collision
+                       if (prevY + this.size/2 <= obstacle.y || prevY - this.size/2 >= obstacle.y + obstacle.height) {
+                           this.dy *= -1;
+                       }
+                       this.isReturning = true; // Start returning after one bounce
+                   }
+               }
+           });
+
+
+           return true;
+       }
+
+
+       draw() {
+           ctx.save();
+           ctx.translate(this.x, this.y);
+
+
+           if (this.isDropped) {
+               ctx.globalAlpha = 0.6;
+               ctx.strokeStyle = '#6b7280'; // gray-500
+               ctx.lineWidth = 4;
+           } else {
+                ctx.rotate(this.rotation);
+               ctx.strokeStyle = this.owner.color;
+               ctx.lineWidth = 5;
+               ctx.shadowColor = this.owner.color;
+               ctx.shadowBlur = 10;
+           }
+         
+           ctx.beginPath();
+           ctx.arc(0, 0, this.size / 2, 0, Math.PI * 1.5);
+           ctx.stroke();
+           ctx.restore();
+       }
+   }
+
+
+   class Obstacle {
+       constructor(x, y, width, height) {
+           this.x = x;
+           this.y = y;
+           this.width = width;
+           this.height = height;
+           this.color = '#a8b2c5'; // A nice slate color
+       }
+
+
+       draw() {
+           ctx.fillStyle = this.color;
+           ctx.fillRect(this.x, this.y, this.width, this.height);
+       }
+   }
+
+
+   class Particle {
+       constructor(x, y, color, count, decay, speed) {
+           this.particles = [];
+           for (let i = 0; i < count; i++) {
+               const angle = Math.random() * Math.PI * 2;
+               this.particles.push({
+                   x: x,
+                   y: y,
+                   dx: Math.cos(angle) * (Math.random() * speed),
+                   dy: Math.sin(angle) * (Math.random() * speed),
+                   radius: Math.random() * 3 + 1,
+                   alpha: 1,
+                   color: color,
+                   decay: decay,
+               });
+           }
+       }
+      
+       update() {
+           this.particles.forEach(p => {
+               p.x += p.dx;
+               p.y += p.dy;
+               p.alpha *= p.decay;
+           });
+           this.particles = this.particles.filter(p => p.alpha > 0.1);
+           return this.particles.length > 0;
+       }
+
+
+       draw() {
+           this.particles.forEach(p => {
+               ctx.save();
+               ctx.globalAlpha = p.alpha;
+               ctx.fillStyle = p.color;
+               ctx.beginPath();
+               ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+               ctx.fill();
+               ctx.restore();
+           });
+       }
+   }
+  
+   function createParticle(x, y, color, count = 20, decay = 0.95, speed = 4) {
+       particles.push(new Particle(x, y, color, count, decay, speed));
+   }
+
+
+
+
+   // --- Game Logic ---
+   function init() {
+       resizeCanvas();
+       drawCharacterPreviews();
+   }
+  
+   function setupMap() {
+       obstacles = [];
+       const mapData = MAPS[selectedMap];
+       mapData.forEach(o => {
+           obstacles.push(new Obstacle(o.x, o.y, o.w, o.h));
+       });
+   }
+  
+   function createPlayerInfo() {
+       playerInfo = [];
+       const playerTeamColor = '#f472b6';
+       const botColors = ['#2dd4bf', '#f59e0b', '#8b5cf6'];
+
+
+       // Human Player
+       playerInfo.push({
+           name: 'Player 1', color: playerTeamColor, character: selectedCharacterType, isBot: false, team: 1
+       });
+
+
+       if (selectedGameMode === 'solos') {
+           const botCount = totalBrawlers - 1;
+           for (let i = 0; i < botCount; i++) {
+               const botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
+               playerInfo.push({ name: `Bot ${i+1}`, color: botColors[i], character: botType, isBot: true, team: 2 + i });
+           }
+       } else { // Teams
+           let botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
+           playerInfo.push({ name: 'Ally Bot', color: playerTeamColor, character: botType, isBot: true, team: 1 });
+           botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
+           playerInfo.push({ name: 'Enemy 1', color: botColors[0], character: botType, isBot: true, team: 2 });
+           botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
+           playerInfo.push({ name: 'Enemy 2', color: botColors[0], character: botType, isBot: true, team: 2 });
+       }
+   }
+
+
+   function resetRound() {
+       isRoundOver = false;
+       boomerangs = [];
+       particles = [];
+       players = [];
+      
+       setupMap();
+      
+       let spawns = [...SPAWN_POINTS];
+       shuffleArray(spawns);
+
+
+       playerInfo.forEach((info, index) => {
+            const spawn = spawns[index % spawns.length];
+            let x, y;
+            if (selectedGameMode === 'teams') {
+               // Team-based spawns
+               if(info.team === 1) { // Player's team
+                   x = 150 + (index % 2 * 50); y = BASE_HEIGHT / 2 - 50 + (index % 2 * 100);
+               } else { // Bot team
+                   x = BASE_WIDTH - 150 - (index % 2 * 50); y = BASE_HEIGHT / 2 - 50 + (index % 2 * 100);
+               }
+            } else {
+               x = spawn.x; y = spawn.y;
+            }
+          
+           players.push(new Player(x, y, info.color, info.isBot ? {} : { up: 'w', down: 's', left: 'a', right: 'd', dash: 'e' }, info.name, info.character, info.team, index + 1, info.isBot, selectedDifficulty));
+       });
+   }
+  
+   function checkRoundOver() {
+       if(isRoundOver) return;
+      
+       const alivePlayers = players.filter(p => !p.isEliminated);
+       const aliveTeams = [...new Set(alivePlayers.map(p => p.team))];
+      
+       if (aliveTeams.length <= 1) {
+           isRoundOver = true;
+           if (aliveTeams.length === 1) {
+               const winningTeam = aliveTeams[0];
+               if (selectedGameMode === 'teams') {
+                    matchScores[winningTeam-1]++;
+               } else { // Solos
+                   const winner = alivePlayers[0];
+                   const winnerIndex = playerInfo.findIndex(p => p.team === winner.team);
+                   if(winnerIndex !== -1) matchScores[winnerIndex]++;
+               }
+           }
+           setTimeout(showNextRoundScreen, 1500);
+       }
+   }
+  
+   function showNextRoundScreen() {
+       if (matchScores.some(score => score >= WIN_SCORE)) {
+           endGame();
+           return;
+       }
+      
+       // Populate score display
+       scoreDisplay.innerHTML = '';
+       nextRoundTitle.textContent = `Round Over! First to ${WIN_SCORE} wins.`;
+      
+       if(selectedGameMode === 'teams') {
+           const team1Score = matchScores[0];
+           const team2Score = matchScores[1];
+           scoreDisplay.innerHTML = `
+               <div class="flex justify-between items-center bg-gray-100 p-2 rounded">
+                   <span class="font-bold" style="color:${playerInfo[0].color};">Your Team</span>
+                   <span class="font-bold text-2xl">${team1Score}</span>
+               </div>
+               <div class="flex justify-between items-center bg-gray-100 p-2 rounded">
+                   <span class="font-bold" style="color:${playerInfo[2].color};">Enemy Team</span>
+                   <span class="font-bold text-2xl">${team2Score}</span>
+               </div>
+           `;
+
+
+       } else { // Solos
+            playerInfo.forEach((p, index) => {
+               const score = matchScores[index];
+               const div = document.createElement('div');
+               div.className = 'flex justify-between items-center bg-gray-100 p-2 rounded';
+               div.innerHTML = `
+                   <span class="font-bold" style="color:${p.color};">Player ${index+1} (${p.name.replace('Player 1', 'You')})</span>
+                   <span class="font-bold text-2xl">${score}</span>
+               `;
+               scoreDisplay.appendChild(div);
+           });
+       }
+
+
+       nextRoundModal.classList.remove('hidden');
+   }
+  
+   function startNextPhase() {
+       nextRoundModal.classList.add('hidden');
+       resetRound();
+   }
+
+
+   function checkCollisions() {
+       // Boomerang vs Player
+       boomerangs.forEach(b => {
+           if (b.isDropped) return;
+           players.forEach(p => {
+               // Cant hit own team, dashing, or already stunned players
+               if (p.team === b.owner.team || p.isDashing || p.stunTimer > 0) return;
+              
+               const hitDist = p.width / 2;
+               if (Math.hypot(b.x - (p.x + p.width/2), b.y - (p.y + p.height/2)) < hitDist) {
+                   p.stunTimer = 1000;
+                   createParticle(p.x + p.width/2, p.y + p.height/2, '#FBBF24', 50, 0.96, 5);
+               }
+           });
+       });
+
+
+       // Melee Hit detection
+       players.forEach(attacker => {
+           if (!attacker.isHitting) return;
+
+
+           const attackerCenterX = attacker.x + attacker.width / 2;
+           const attackerCenterY = attacker.y + attacker.height / 2;
+
+
+           // Melee vs Player
+           players.forEach(target => {
+               if (attacker.team === target.team || target.stunTimer > 0 || target.isDashing) return;
+
+
+               const targetCenterX = target.x + target.width / 2;
+               const targetCenterY = target.y + target.height / 2;
+               const dist = Math.hypot(attackerCenterX - targetCenterX, attackerCenterY - targetCenterY);
+              
+               if (dist < MELEE_RANGE) {
+                   const angleToTarget = Math.atan2(targetCenterY - attackerCenterY, targetCenterX - attackerCenterX);
+                   const attackAngle = Math.atan2(attacker.lastAimDir.y, attacker.lastAimDir.x);
+                   let angleDiff = Math.abs(attackAngle - angleToTarget);
+                   if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+
+
+                   if (angleDiff < Math.PI / 2) {
+                       target.stunTimer = 500;
+                       createParticle(targetCenterX, targetCenterY, '#FFFFFF', 30, 0.9, 3);
+                   }
+               }
+           });
+
+
+           // Melee vs Boomerang
+           boomerangs.forEach(b => {
+               if (b.owner.team === attacker.team || b.isDropped) return;
+               const dist = Math.hypot(attackerCenterX - b.x, attackerCenterY - b.y);
+                if (dist < MELEE_RANGE) {
+                   b.isDropped = true;
+                   createParticle(b.x, b.y, '#FFFFFF', 15, 0.9, 2);
+                }
+           });
+       });
+
+
+       // Boomerang pickup
+       players.forEach(p => {
+           if (p.boomerangCount < 2 && !p.isEliminated) {
+               for (const b of boomerangs) {
+                   if (b.isDropped) {
+                       const distance = Math.hypot((p.x + p.width / 2) - b.x, (p.y + p.height / 2) - b.y);
+                       if (distance < p.width / 2 + b.size / 2) {
+                           p.boomerangCount++;
+                           b.isPickedUp = true;
+                           createParticle(b.x, b.y, '#FFFFFF', 15, 0.92, 3);
+                           break;
+                       }
+                   }
+               }
+           }
+       });
+   }
+  
+   function endGame() {
+       isGameOver = true;
+       let winnerInfo = "No one";
+       if (selectedGameMode === 'teams') {
+           const playerTeamWon = matchScores[0] > matchScores[1];
+            winnerText.textContent = playerTeamWon ? 'Your Team Wins!' : 'Enemy Team Wins!';
+            winnerSubtext.textContent = `Final Score: ${matchScores[0]} to ${matchScores[1]}.`;
+       } else { // Solos
+           let highScore = -1;
+           let winnerIndex = -1;
+           matchScores.forEach((score, index) => {
+               if(score > highScore) {
+                   highScore = score;
+                   winnerIndex = index;
+               }
+           });
+           winnerInfo = playerInfo[winnerIndex];
+           winnerText.textContent = `${winnerInfo.name.replace('Player 1', 'You')} Won!`;
+           winnerSubtext.textContent = `With a final score of ${highScore}!`;
+       }
+      
+       gameOverModal.classList.remove('hidden');
+       setTimeout(() => {
+           gameOverContent.classList.remove('scale-95', 'opacity-0');
+       }, 10);
+   }
+  
+   function initializeGame() {
+       createPlayerInfo();
+       matchScores = new Array(playerInfo.length).fill(0);
+       if(selectedGameMode === 'teams') matchScores = [0, 0];
+      
+       isGameOver = false;
+       resetRound();
+       gameOverModal.classList.add('hidden');
+       gameOverContent.classList.add('scale-95', 'opacity-0');
+       gameLoop();
+   }
+  
+   function returnToMainMenu() {
+       gameOverModal.classList.add('hidden');
+       gameOverContent.classList.add('scale-95', 'opacity-0');
+       startModal.classList.remove('hidden');
+   }
+  
+   function startGame() {
+       startModal.classList.add('hidden');
+       characterSelectModal.classList.remove('hidden');
+   }
+
+
+   // --- Drawing ---
+   function draw() {
+       ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+      
+       obstacles.forEach(o => o.draw());
+       players.forEach(p => p.draw());
+       boomerangs.forEach(b => b.draw());
+       particles.forEach(p => p.draw());
+   }
+  
+   function drawCharacterPreviews() {
+       ['boba', 'coffee', 'juice'].forEach(charType => {
+           const previewCanvas = document.getElementById(`${charType}-preview`);
+           const pCtx = previewCanvas.getContext('2d');
+           pCtx.clearRect(0, 0, 80, 80);
+          
+           // Use the actual Player class to draw, but need to fake some properties
+           const tempPlayer = new Player(0,0, '#6b7280', {}, '', charType, 0, 1);
+          
+           pCtx.save();
+           // Translate first to center the drawing, then scale
+           pCtx.translate(10, 10);
+           pCtx.scale(2, 2); // Make it bigger
+          
+           const originalCtx = ctx; // Swap contexts
+           ctx = pCtx;
+           tempPlayer.draw(true);
+           ctx = originalCtx; // Swap back
+           pCtx.restore();
+       });
+   }
+
+
+   // --- Game Loop ---
+   function gameLoop() {
+       if (isGameOver) return;
+
+
+       // Update logic
+       players.forEach(p => p.update());
+       boomerangs = boomerangs.filter(b => b.update() && !b.isPickedUp);
+       particles = particles.filter(p => p.update());
+       checkCollisions();
+       checkRoundOver();
+      
+       // Drawing
+       draw();
+
+
+       requestAnimationFrame(gameLoop);
+   }
+  
+   // --- UI Event Listeners ---
+   function updateBotCountUI() {
+       botsCount.textContent = totalBrawlers;
+       if (selectedGameMode === 'solos') {
+           botsPlus.disabled = totalBrawlers >= 4;
+           botsMinus.disabled = totalBrawlers <= 2;
+           botCountDescription.textContent = `Free-For-All`;
+       } else { // Teams
+           botsPlus.disabled = true;
+           botsMinus.disabled = true;
+           totalBrawlers = 4;
+           botsCount.textContent = totalBrawlers;
+           botCountDescription.textContent = `2 vs 2`;
+       }
+   }
+
+
+   characterChoices.addEventListener('click', (e) => {
+       const card = e.target.closest('.select-card');
+       if (card) {
+           characterChoices.querySelector('.selected').classList.remove('selected');
+           card.classList.add('selected');
+           selectedCharacterType = card.dataset.char;
+       }
+   });
+
+
+   solosBtn.addEventListener('click', () => {
+       selectedGameMode = 'solos';
+       solosBtn.classList.add('selected');
+       teamsBtn.classList.remove('selected');
+       totalBrawlers = 2;
+       updateBotCountUI();
+   });
+
+
+   teamsBtn.addEventListener('click', () => {
+       selectedGameMode = 'teams';
+       teamsBtn.classList.add('selected');
+       solosBtn.classList.remove('selected');
+       updateBotCountUI();
+   });
+
+
+   botsPlus.addEventListener('click', () => {
+       if (totalBrawlers < 4) totalBrawlers++;
+       updateBotCountUI();
+   });
+   botsMinus.addEventListener('click', () => {
+       if (totalBrawlers > 2) totalBrawlers--;
+       updateBotCountUI();
+   });
+  
+   mapChoices.addEventListener('click', (e) => {
+       const button = e.target.closest('.select-btn');
+       if (button) {
+           mapChoices.querySelector('.selected').classList.remove('selected');
+           button.classList.add('selected');
+           selectedMap = button.dataset.map;
+       }
+   });
+
+
+   difficultyChoices.addEventListener('click', (e) => {
+       const button = e.target.closest('.select-btn');
+       if (button) {
+           difficultyChoices.querySelector('.selected').classList.remove('selected');
+           button.classList.add('selected');
+           selectedDifficulty = button.dataset.diff;
+       }
+   });
+
+
+
+
+   window.addEventListener('resize', init);
+   startButton.addEventListener('click', startGame);
+   restartButton.addEventListener('click', initializeGame);
+   brawlButton.addEventListener('click', () => {
+       characterSelectModal.classList.add('hidden');
+       initializeGame();
+   });
+   nextRoundButton.addEventListener('click', startNextPhase);
+   mainMenuButton.addEventListener('click', returnToMainMenu);
+  
+   // Initial setup
+   init();
+
+
+</script>
+</body>
+</html>
