@@ -1087,6 +1087,10 @@ export const Game = () => {
   };
 
   const startGame = () => {
+    // Cancel any existing game loop before starting a new one
+    if (gameStateRef.current.animationId) {
+      cancelAnimationFrame(gameStateRef.current.animationId);
+    }
     createPlayerInfo();
     gameStateRef.current.isGameOver = false;
     resetRound();
@@ -1118,25 +1122,25 @@ export const Game = () => {
   };
 
   return (
-    <div className="w-screen h-screen flex items-center justify-center bg-[#f0f4f8]">
+    <div className="w-screen h-screen flex items-center justify-center bg-background">
       <canvas 
         ref={canvasRef} 
-        className="bg-white rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.1),0_6px_6px_rgba(0,0,0,0.1)]"
+        className="bg-card rounded-2xl shadow-2xl"
         style={{ aspectRatio: '16/9', maxWidth: '100%', maxHeight: '100%' }}
       />
 
       {showStartModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white text-center p-10 rounded-2xl shadow-2xl max-w-lg">
-            <h1 className="text-6xl font-bold mb-4 text-gray-800">Foodie Brawlers</h1>
-            <p className="text-gray-600 mb-8 text-lg">Dash, dodge, and brawl to become the last foodie standing!</p>
+          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-lg">
+            <h1 className="text-6xl font-bold mb-4">Foodie Brawlers</h1>
+            <p className="text-muted-foreground mb-8 text-lg">Dash, dodge, and brawl to become the last foodie standing!</p>
             <div className="flex justify-center text-left mb-8">
-              <div className="bg-gray-50 p-6 rounded-lg border">
-                <h3 className="font-bold text-2xl text-pink-500 mb-2">Controls</h3>
-                <p><kbd className="font-sans bg-gray-200 rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-gray-200 rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-gray-200 rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-gray-200 rounded px-2 py-1">D</kbd> - Move</p>
-                <p><kbd className="font-sans bg-gray-200 rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
-                <p><kbd className="font-sans bg-gray-200 rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
-                <p><kbd className="font-sans bg-gray-200 rounded px-2 py-1">E</kbd> - Dash</p>
+              <div className="bg-muted/50 p-6 rounded-lg border border-border">
+                <h3 className="font-bold text-2xl text-primary mb-2">Controls</h3>
+                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">D</kbd> - Move</p>
+                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
+                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
+                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">E</kbd> - Dash</p>
               </div>
             </div>
             <Button 
@@ -1145,7 +1149,7 @@ export const Game = () => {
                 setShowCharacterSelect(true);
                 setTimeout(drawCharacterPreviews, 100);
               }} 
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-10 rounded-full text-2xl"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-10 rounded-full text-2xl"
             >
               Play
             </Button>
@@ -1155,18 +1159,18 @@ export const Game = () => {
 
       {showCharacterSelect && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full">
-            <h2 className="text-4xl font-bold mb-6 text-gray-800">Game Setup</h2>
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full">
+            <h2 className="text-4xl font-bold mb-6">Game Setup</h2>
             
             <div className="grid grid-cols-2 gap-8">
               <div>
-                <h3 className="text-2xl font-bold mb-3 text-gray-700">Choose Your Fighter</h3>
+                <h3 className="text-2xl font-bold mb-3">Choose Your Fighter</h3>
                 <div className="flex justify-center gap-6 mb-6">
                   {(['boba', 'coffee', 'juice'] as CharacterType[]).map(char => (
                     <div
                       key={char}
                       className={`border-4 rounded-xl p-4 cursor-pointer transition-all ${
-                        selectedCharacter === char ? 'border-red-500 bg-red-100' : 'border-transparent bg-gray-100 hover:scale-105'
+                        selectedCharacter === char ? 'border-primary bg-primary/10' : 'border-transparent bg-muted hover:scale-105'
                       }`}
                       onClick={() => setSelectedCharacter(char)}
                     >
@@ -1176,13 +1180,13 @@ export const Game = () => {
                   ))}
                 </div>
 
-                <h3 className="text-2xl font-bold mb-3 text-gray-700">Choose Your Arena</h3>
+                <h3 className="text-2xl font-bold mb-3">Choose Your Arena</h3>
                 <div className="flex justify-center gap-4">
                   {(['classic', 'pillars', 'open'] as MapType[]).map(map => (
                     <button
                       key={map}
                       className={`border-2 px-6 py-2 rounded-full font-bold transition-all ${
-                        selectedMap === map ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-100'
+                        selectedMap === map ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border hover:bg-muted'
                       }`}
                       onClick={() => setSelectedMap(map)}
                     >
@@ -1192,15 +1196,15 @@ export const Game = () => {
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-2xl font-bold mb-4 text-gray-700">Game Rules</h3>
+              <div className="bg-muted/50 p-6 rounded-lg">
+                <h3 className="text-2xl font-bold mb-4">Game Rules</h3>
                 <div className="grid grid-cols-2 gap-6 mb-4">
                   <div>
-                    <h4 className="text-xl font-bold mb-2 text-gray-600">Game Mode</h4>
+                    <h4 className="text-xl font-bold mb-2 text-muted-foreground">Game Mode</h4>
                     <div className="flex justify-center gap-2">
                       <button
                         className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedMode === 'solos' ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
+                          selectedMode === 'solos' ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
                         }`}
                         onClick={() => {
                           setSelectedMode('solos');
@@ -1211,7 +1215,7 @@ export const Game = () => {
                       </button>
                       <button
                         className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedMode === 'teams' ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
+                          selectedMode === 'teams' ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
                         }`}
                         onClick={() => {
                           setSelectedMode('teams');
@@ -1224,10 +1228,10 @@ export const Game = () => {
                   </div>
 
                   <div>
-                    <h4 className="text-xl font-bold mb-2 text-gray-600">Total Brawlers</h4>
+                    <h4 className="text-xl font-bold mb-2 text-muted-foreground">Total Brawlers</h4>
                     <div className="flex items-center justify-center gap-4">
                       <button
-                        className="text-xl font-bold bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
+                        className="text-xl font-bold bg-muted rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
                         onClick={() => setTotalBrawlers(Math.max(2, totalBrawlers - 1))}
                         disabled={selectedMode === 'teams' || totalBrawlers <= 2}
                       >
@@ -1235,27 +1239,27 @@ export const Game = () => {
                       </button>
                       <span className="text-2xl font-bold w-10 text-center">{totalBrawlers}</span>
                       <button
-                        className="text-xl font-bold bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
+                        className="text-xl font-bold bg-muted rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
                         onClick={() => setTotalBrawlers(Math.min(4, totalBrawlers + 1))}
                         disabled={selectedMode === 'teams' || totalBrawlers >= 4}
                       >
                         +
                       </button>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {selectedMode === 'teams' ? '2 vs 2' : 'Free-For-All'}
                     </p>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-xl font-bold mb-2 text-gray-600">Bot Difficulty</h4>
+                  <h4 className="text-xl font-bold mb-2 text-muted-foreground">Bot Difficulty</h4>
                   <div className="flex justify-center gap-2">
                     {(['easy', 'medium', 'hard'] as Difficulty[]).map(diff => (
                       <button
                         key={diff}
                         className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedDifficulty === diff ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
+                          selectedDifficulty === diff ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
                         }`}
                         onClick={() => setSelectedDifficulty(diff)}
                       >
@@ -1272,7 +1276,7 @@ export const Game = () => {
                 setShowCharacterSelect(false);
                 startGame();
               }}
-              className="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-12 rounded-full text-2xl mt-8"
+              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-12 rounded-full text-2xl mt-8"
             >
               Brawl!
             </Button>
@@ -1282,16 +1286,16 @@ export const Game = () => {
 
       {showGameOver && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white text-center p-8 rounded-2xl shadow-2xl">
-            <h2 className="text-5xl font-bold mb-4 text-gray-800">{winnerText}</h2>
-            <p className="text-gray-600 mb-6">{winnerSubtext}</p>
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl">
+            <h2 className="text-5xl font-bold mb-4">{winnerText}</h2>
+            <p className="text-muted-foreground mb-6">{winnerSubtext}</p>
             <div className="flex justify-center gap-4">
               <Button
                 onClick={() => {
                   setShowGameOver(false);
                   startGame();
                 }}
-                className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-xl"
+                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold py-3 px-8 rounded-full text-xl"
               >
                 Play Again
               </Button>
@@ -1301,7 +1305,7 @@ export const Game = () => {
                   setShowStartModal(true);
                   gameStateRef.current.isGameOver = true;
                 }}
-                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-full text-xl"
+                className="bg-muted hover:bg-muted/90 text-foreground font-bold py-3 px-8 rounded-full text-xl"
               >
                 Main Menu
               </Button>
@@ -1312,12 +1316,12 @@ export const Game = () => {
 
       {showNextRound && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white text-center p-8 rounded-2xl shadow-2xl max-w-md">
-            <h2 className="text-4xl font-bold mb-4 text-gray-800">Round Over!</h2>
-            <p className="text-lg mb-4">First to {WIN_SCORE} wins</p>
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-md">
+            <h2 className="text-4xl font-bold mb-4">Round Over!</h2>
+            <p className="text-lg mb-4 text-muted-foreground">First to {WIN_SCORE} wins</p>
             <div className="mb-6 space-y-2 text-lg">
               {scoreInfo.map((info, i) => (
-                <div key={i} className="flex justify-between items-center bg-gray-100 p-2 rounded">
+                <div key={i} className="flex justify-between items-center bg-muted/50 p-2 rounded">
                   <span className="font-bold" style={{color: info.color}}>{info.name}</span>
                   <span className="font-bold text-2xl">{info.score}</span>
                 </div>
@@ -1329,7 +1333,7 @@ export const Game = () => {
                 resetRound();
                 gameLoop();
               }}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-xl"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl"
             >
               Next Round
             </Button>
