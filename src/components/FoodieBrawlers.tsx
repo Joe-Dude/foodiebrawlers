@@ -1330,7 +1330,6 @@ export const Game = () => {
               onClick={() => {
                 setShowNextRound(false);
                 resetRound();
-                gameLoop();
               }}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl"
             >
