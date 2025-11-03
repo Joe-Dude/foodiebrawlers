@@ -725,7 +725,6 @@ export const Game = () => {
   const [showGameOver, setShowGameOver] = useState(false);
   const [showNextRound, setShowNextRound] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterType>('boba');
-  const [selectedMap, setSelectedMap] = useState<MapType>('classic');
   const [selectedMode, setSelectedMode] = useState<GameMode>('solos');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
   const [totalBrawlers, setTotalBrawlers] = useState(2);
@@ -880,7 +879,10 @@ export const Game = () => {
 
   const setupMap = () => {
     gameStateRef.current.obstacles = [];
-    const mapData = MAPS[selectedMap];
+    // Randomly select a map
+    const mapNames = Object.keys(MAPS) as MapType[];
+    const randomMap = mapNames[Math.floor(Math.random() * mapNames.length)];
+    const mapData = MAPS[randomMap];
     mapData.forEach(o => {
       gameStateRef.current.obstacles.push(new Obstacle(o.x, o.y, o.w, o.h));
     });
@@ -916,10 +918,12 @@ export const Game = () => {
   };
 
   const resetRound = () => {
+    // Reset all game state variables
     gameStateRef.current.isRoundOver = false;
     gameStateRef.current.boomerangs = [];
     gameStateRef.current.particles = [];
     gameStateRef.current.players = [];
+    gameStateRef.current.keys = {};
     
     setupMap();
     
@@ -1091,6 +1095,16 @@ export const Game = () => {
     if (gameStateRef.current.animationId) {
       cancelAnimationFrame(gameStateRef.current.animationId);
     }
+    
+    // Complete reset of all game variables
+    gameStateRef.current.players = [];
+    gameStateRef.current.boomerangs = [];
+    gameStateRef.current.obstacles = [];
+    gameStateRef.current.particles = [];
+    gameStateRef.current.keys = {};
+    gameStateRef.current.matchScores = [];
+    gameStateRef.current.isRoundOver = false;
+    
     createPlayerInfo();
     gameStateRef.current.isGameOver = false;
     resetRound();
@@ -1177,21 +1191,6 @@ export const Game = () => {
                       <canvas id={`${char}-preview`} width="80" height="80" className="mb-2"></canvas>
                       <p className="font-bold capitalize">{char}</p>
                     </div>
-                  ))}
-                </div>
-
-                <h3 className="text-2xl font-bold mb-3">Choose Your Arena</h3>
-                <div className="flex justify-center gap-4">
-                  {(['classic', 'pillars', 'open'] as MapType[]).map(map => (
-                    <button
-                      key={map}
-                      className={`border-2 px-6 py-2 rounded-full font-bold transition-all ${
-                        selectedMap === map ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border hover:bg-muted'
-                      }`}
-                      onClick={() => setSelectedMap(map)}
-                    >
-                      {map.charAt(0).toUpperCase() + map.slice(1)}
-                    </button>
                   ))}
                 </div>
               </div>
