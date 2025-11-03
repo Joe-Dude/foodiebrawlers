@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type CharacterType = 'boba' | 'coffee' | 'juice';
+type CharacterType = 'boba' | 'coffee' | 'juice' | 'soda' | 'smoothie' | 'milkshake';
 type GameMode = 'solos' | 'teams';
 type Difficulty = 'easy' | 'medium' | 'hard';
 type MapType = 'classic' | 'pillars' | 'open';
@@ -9,7 +9,7 @@ type MapType = 'classic' | 'pillars' | 'open';
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 const PLAYER_SIZE = 30;
-const PLAYER_SPEED = 3.5;
+const PLAYER_SPEED = 4.5;
 const DASH_SPEED = 18;
 const DASH_DURATION = 120;
 const BOOMERANG_SIZE = 25;
@@ -18,8 +18,8 @@ const BOOMERANG_RANGE = 250;
 const MELEE_RANGE = 45;
 const MELEE_DURATION = 150;
 const MELEE_COOLDOWN = 400;
-const WIN_SCORE = 3;
-const CHARACTER_TYPES: CharacterType[] = ['boba', 'coffee', 'juice'];
+const WIN_SCORE = 10;
+const CHARACTER_TYPES: CharacterType[] = ['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake'];
 
 const MAPS = {
   classic: [
@@ -380,6 +380,15 @@ class Player {
       case 'juice':
         this.drawJuiceBox(ctx, preview);
         break;
+      case 'soda':
+        this.drawSoda(ctx, preview);
+        break;
+      case 'smoothie':
+        this.drawSmoothie(ctx, preview);
+        break;
+      case 'milkshake':
+        this.drawMilkshake(ctx, preview);
+        break;
     }
 
     if (this.boomerangCount > 0 && !preview) {
@@ -524,6 +533,78 @@ class Player {
     ctx.beginPath();
     ctx.arc(x + this.width/2, y + this.height/2, 5, 0, Math.PI*2);
     ctx.fill();
+  }
+
+  drawSoda(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(x + this.width * 0.2, y, this.width * 0.6, this.height);
+    
+    ctx.fillStyle = '#991b1b';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + 5, this.width * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = '#fca5a5';
+    ctx.fillRect(x + this.width * 0.25, y + this.height * 0.3, this.width * 0.5, this.height * 0.3);
+  }
+
+  drawSmoothie(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width * 0.2, y + this.height);
+    ctx.lineTo(x + this.width * 0.8, y + this.height);
+    ctx.lineTo(x + this.width * 0.7, y);
+    ctx.lineTo(x + this.width * 0.3, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e9d5ff';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height * 0.4, 3, 0, Math.PI * 2);
+    ctx.arc(x + this.width * 0.35, y + this.height * 0.6, 2.5, 0, Math.PI * 2);
+    ctx.arc(x + this.width * 0.65, y + this.height * 0.5, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#f3e8ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + this.width * 0.6, y);
+    ctx.lineTo(x + this.width * 0.6, y - 10);
+    ctx.stroke();
+  }
+
+  drawMilkshake(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width * 0.25, y + this.height);
+    ctx.lineTo(x + this.width * 0.75, y + this.height);
+    ctx.lineTo(x + this.width * 0.65, y + this.height * 0.3);
+    ctx.lineTo(x + this.width * 0.35, y + this.height * 0.3);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height * 0.2, this.width * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height * 0.15, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + this.width * 0.65, y + this.height * 0.3);
+    ctx.lineTo(x + this.width * 0.75, y);
+    ctx.stroke();
   }
 }
 
@@ -721,6 +802,9 @@ function shuffleArray(array: any[]) {
 export const Game = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showStartModal, setShowStartModal] = useState(true);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showModeSelect, setShowModeSelect] = useState(false);
   const [showCharacterSelect, setShowCharacterSelect] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [showNextRound, setShowNextRound] = useState(false);
@@ -732,6 +816,7 @@ export const Game = () => {
   const [winnerText, setWinnerText] = useState('You Win!');
   const [winnerSubtext, setWinnerSubtext] = useState('');
   const [scoreInfo, setScoreInfo] = useState<{name: string, score: number, color: string}[]>([]);
+  const [botCursors, setBotCursors] = useState<{x: number, y: number, targetChar: CharacterType, progress: number}[]>([]);
   
   const gameStateRef = useRef({
     players: [] as Player[],
@@ -856,7 +941,7 @@ export const Game = () => {
   }, []);
 
   const drawCharacterPreviews = () => {
-    ['boba', 'coffee', 'juice'].forEach(charType => {
+    CHARACTER_TYPES.forEach(charType => {
       const previewCanvas = document.getElementById(`${charType}-preview`) as HTMLCanvasElement;
       if (!previewCanvas) return;
       const pCtx = previewCanvas.getContext('2d');
@@ -872,6 +957,52 @@ export const Game = () => {
       pCtx.restore();
     });
   };
+
+  useEffect(() => {
+    if (showCharacterSelect && totalBrawlers > 1) {
+      const numBots = totalBrawlers - 1;
+      const newBotCursors = [];
+      for (let i = 0; i < numBots; i++) {
+        newBotCursors.push({
+          x: Math.random() * 400 + 100,
+          y: Math.random() * 300 + 100,
+          targetChar: CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)],
+          progress: 0
+        });
+      }
+      setBotCursors(newBotCursors);
+
+      const interval = setInterval(() => {
+        setBotCursors(prev => prev.map(cursor => {
+          const charElement = document.getElementById(`${cursor.targetChar}-preview`);
+          if (!charElement) return cursor;
+          
+          const rect = charElement.getBoundingClientRect();
+          const targetX = rect.left + rect.width / 2 - 300;
+          const targetY = rect.top + rect.height / 2 - 200;
+          
+          const newProgress = cursor.progress + 0.02;
+          if (newProgress >= 1) {
+            return {
+              x: targetX,
+              y: targetY,
+              targetChar: CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)],
+              progress: 0
+            };
+          }
+          
+          return {
+            ...cursor,
+            x: cursor.x + (targetX - cursor.x) * 0.05,
+            y: cursor.y + (targetY - cursor.y) * 0.05,
+            progress: newProgress
+          };
+        }));
+      }, 50);
+
+      return () => clearInterval(interval);
+    }
+  }, [showCharacterSelect, totalBrawlers]);
 
   const createParticle = (x: number, y: number, color: string, count = 20, decay = 0.95, speed = 4) => {
     gameStateRef.current.particles.push(new Particle(x, y, color, count, decay, speed));
@@ -1146,26 +1277,176 @@ export const Game = () => {
       {showStartModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-lg">
-            <h1 className="text-6xl font-bold mb-4">Foodie Brawlers</h1>
-            <p className="text-muted-foreground mb-8 text-lg">Dash, dodge, and brawl to become the last foodie standing!</p>
-            <div className="flex justify-center text-left mb-8">
+            <h1 className="text-6xl font-bold mb-6">Foodie Brawlers</h1>
+            <p className="text-muted-foreground mb-10 text-lg">Dash, dodge, and brawl to become the last foodie standing!</p>
+            <div className="flex flex-col gap-4">
+              <Button 
+                onClick={() => {
+                  setShowStartModal(false);
+                  setShowModeSelect(true);
+                }} 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-10 rounded-full text-2xl"
+              >
+                Start
+              </Button>
+              <Button 
+                onClick={() => {
+                  setShowStartModal(false);
+                  setShowHowToPlay(true);
+                }} 
+                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold py-4 px-10 rounded-full text-2xl"
+              >
+                How to Play
+              </Button>
+              <Button 
+                onClick={() => {
+                  setShowStartModal(false);
+                  setShowOptions(true);
+                }} 
+                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-10 rounded-full text-2xl"
+              >
+                Options
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHowToPlay && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-2xl">
+            <h2 className="text-5xl font-bold mb-6">How to Play</h2>
+            <div className="text-left space-y-6 mb-8">
               <div className="bg-muted/50 p-6 rounded-lg border border-border">
-                <h3 className="font-bold text-2xl text-primary mb-2">Controls</h3>
-                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">D</kbd> - Move</p>
-                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
-                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
-                <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">E</kbd> - Dash</p>
+                <h3 className="font-bold text-2xl text-primary mb-3">Controls</h3>
+                <div className="space-y-2">
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">D</kbd> - Move</p>
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">E</kbd> - Dash</p>
+                </div>
+              </div>
+              <div className="bg-muted/50 p-6 rounded-lg border border-border">
+                <h3 className="font-bold text-2xl text-primary mb-3">Game Rules</h3>
+                <ul className="list-disc list-inside space-y-2 text-foreground">
+                  <li>Be the last brawler standing to win a round</li>
+                  <li>First player to {WIN_SCORE} rounds wins the match</li>
+                  <li>Throw boomerangs to stun opponents from distance</li>
+                  <li>Use melee attacks when close to enemies</li>
+                  <li>Dash to dodge attacks and reposition quickly</li>
+                  <li>Pick up dropped boomerangs to reload</li>
+                </ul>
               </div>
             </div>
             <Button 
               onClick={() => {
-                setShowStartModal(false);
+                setShowHowToPlay(false);
+                setShowStartModal(true);
+              }} 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl"
+            >
+              Back
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showOptions && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-lg">
+            <h2 className="text-5xl font-bold mb-6">Options</h2>
+            <div className="bg-muted/50 p-6 rounded-lg border border-border mb-8">
+              <h3 className="font-bold text-2xl text-primary mb-4">Bot Difficulty</h3>
+              <div className="flex justify-center gap-3">
+                {(['easy', 'medium', 'hard'] as Difficulty[]).map(diff => (
+                  <button
+                    key={diff}
+                    className={`border-2 px-6 py-3 rounded-full font-bold transition-all ${
+                      selectedDifficulty === diff ? 'bg-secondary text-secondary-foreground border-secondary scale-110' : 'border-border hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedDifficulty(diff)}
+                  >
+                    {diff.charAt(0).toUpperCase() + diff.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button 
+              onClick={() => {
+                setShowOptions(false);
+                setShowStartModal(true);
+              }} 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl"
+            >
+              Back
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showModeSelect && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-2xl w-full">
+            <h2 className="text-4xl font-bold mb-6">Select Game Mode</h2>
+            <div className="grid grid-cols-2 gap-6 mb-8">
+              <button
+                className={`border-4 rounded-xl p-8 transition-all ${
+                  selectedMode === 'solos' ? 'border-primary bg-primary/10 scale-105' : 'border-border hover:scale-105'
+                }`}
+                onClick={() => {
+                  setSelectedMode('solos');
+                  setTotalBrawlers(2);
+                }}
+              >
+                <h3 className="text-3xl font-bold mb-3">Solos</h3>
+                <p className="text-muted-foreground text-lg">Free-for-all battle!</p>
+                <p className="text-muted-foreground mt-2">Every brawler for themselves</p>
+              </button>
+              <button
+                className={`border-4 rounded-xl p-8 transition-all ${
+                  selectedMode === 'teams' ? 'border-primary bg-primary/10 scale-105' : 'border-border hover:scale-105'
+                }`}
+                onClick={() => {
+                  setSelectedMode('teams');
+                  setTotalBrawlers(4);
+                }}
+              >
+                <h3 className="text-3xl font-bold mb-3">Teams</h3>
+                <p className="text-muted-foreground text-lg">2 vs 2 teamwork!</p>
+                <p className="text-muted-foreground mt-2">Fight alongside an ally</p>
+              </button>
+            </div>
+            {selectedMode === 'solos' && (
+              <div className="bg-muted/50 p-6 rounded-lg mb-6">
+                <h4 className="text-xl font-bold mb-3 text-muted-foreground">Total Brawlers</h4>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    className="text-2xl font-bold bg-muted rounded-full w-10 h-10 flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
+                    onClick={() => setTotalBrawlers(Math.max(2, totalBrawlers - 1))}
+                    disabled={totalBrawlers <= 2}
+                  >
+                    -
+                  </button>
+                  <span className="text-3xl font-bold w-12 text-center">{totalBrawlers}</span>
+                  <button
+                    className="text-2xl font-bold bg-muted rounded-full w-10 h-10 flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
+                    onClick={() => setTotalBrawlers(Math.min(6, totalBrawlers + 1))}
+                    disabled={totalBrawlers >= 6}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+            <Button
+              onClick={() => {
+                setShowModeSelect(false);
                 setShowCharacterSelect(true);
                 setTimeout(drawCharacterPreviews, 100);
-              }} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-10 rounded-full text-2xl"
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-12 rounded-full text-2xl"
             >
-              Play
+              Next
             </Button>
           </div>
         </div>
@@ -1173,109 +1454,55 @@ export const Game = () => {
 
       {showCharacterSelect && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full">
-            <h2 className="text-4xl font-bold mb-6">Game Setup</h2>
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full relative">
+            <h2 className="text-4xl font-bold mb-3">Choose Your Fighter</h2>
+            <p className="text-muted-foreground mb-6">Select from {CHARACTER_TYPES.length} unique brawlers!</p>
             
-            <div className="grid grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-2xl font-bold mb-3">Choose Your Fighter</h3>
-                <div className="flex justify-center gap-6 mb-6">
-                  {(['boba', 'coffee', 'juice'] as CharacterType[]).map(char => (
-                    <div
-                      key={char}
-                      className={`border-4 rounded-xl p-4 cursor-pointer transition-all ${
-                        selectedCharacter === char ? 'border-primary bg-primary/10' : 'border-transparent bg-muted hover:scale-105'
-                      }`}
-                      onClick={() => setSelectedCharacter(char)}
-                    >
-                      <canvas id={`${char}-preview`} width="80" height="80" className="mb-2"></canvas>
-                      <p className="font-bold capitalize">{char}</p>
-                    </div>
-                  ))}
+            <div className="grid grid-cols-3 gap-6 mb-8">
+              {CHARACTER_TYPES.map(char => (
+                <div
+                  key={char}
+                  className={`border-4 rounded-xl p-4 cursor-pointer transition-all ${
+                    selectedCharacter === char ? 'border-primary bg-primary/10 scale-110' : 'border-transparent bg-muted hover:scale-105'
+                  }`}
+                  onClick={() => setSelectedCharacter(char)}
+                >
+                  <canvas id={`${char}-preview`} width="80" height="80" className="mb-2"></canvas>
+                  <p className="font-bold capitalize text-lg">{char}</p>
                 </div>
-              </div>
-
-              <div className="bg-muted/50 p-6 rounded-lg">
-                <h3 className="text-2xl font-bold mb-4">Game Rules</h3>
-                <div className="grid grid-cols-2 gap-6 mb-4">
-                  <div>
-                    <h4 className="text-xl font-bold mb-2 text-muted-foreground">Game Mode</h4>
-                    <div className="flex justify-center gap-2">
-                      <button
-                        className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedMode === 'solos' ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
-                        }`}
-                        onClick={() => {
-                          setSelectedMode('solos');
-                          setTotalBrawlers(2);
-                        }}
-                      >
-                        Solos
-                      </button>
-                      <button
-                        className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedMode === 'teams' ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
-                        }`}
-                        onClick={() => {
-                          setSelectedMode('teams');
-                          setTotalBrawlers(4);
-                        }}
-                      >
-                        Teams
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xl font-bold mb-2 text-muted-foreground">Total Brawlers</h4>
-                    <div className="flex items-center justify-center gap-4">
-                      <button
-                        className="text-xl font-bold bg-muted rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
-                        onClick={() => setTotalBrawlers(Math.max(2, totalBrawlers - 1))}
-                        disabled={selectedMode === 'teams' || totalBrawlers <= 2}
-                      >
-                        -
-                      </button>
-                      <span className="text-2xl font-bold w-10 text-center">{totalBrawlers}</span>
-                      <button
-                        className="text-xl font-bold bg-muted rounded-full w-8 h-8 flex items-center justify-center disabled:opacity-50"
-                        onClick={() => setTotalBrawlers(Math.min(4, totalBrawlers + 1))}
-                        disabled={selectedMode === 'teams' || totalBrawlers >= 4}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedMode === 'teams' ? '2 vs 2' : 'Free-For-All'}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xl font-bold mb-2 text-muted-foreground">Bot Difficulty</h4>
-                  <div className="flex justify-center gap-2">
-                    {(['easy', 'medium', 'hard'] as Difficulty[]).map(diff => (
-                      <button
-                        key={diff}
-                        className={`border-2 px-4 py-2 rounded-full font-bold ${
-                          selectedDifficulty === diff ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border'
-                        }`}
-                        onClick={() => setSelectedDifficulty(diff)}
-                      >
-                        {diff.charAt(0).toUpperCase() + diff.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
+
+            {botCursors.map((cursor, i) => (
+              <div
+                key={i}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${cursor.x}px`,
+                  top: `${cursor.y}px`,
+                  transition: 'all 0.1s ease-out'
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" className="drop-shadow-lg">
+                  <path
+                    d="M3 3l7.5 18l2.5-8l8-2.5z"
+                    fill={`hsl(${i * 60}, 70%, 50%)`}
+                    stroke="white"
+                    strokeWidth="2"
+                  />
+                </svg>
+                <div className="text-xs font-bold text-white drop-shadow-lg ml-6 -mt-4">
+                  Bot {i + 1}
+                </div>
+              </div>
+            ))}
 
             <Button
               onClick={() => {
                 setShowCharacterSelect(false);
                 startGame();
               }}
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-12 rounded-full text-2xl mt-8"
+              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-12 rounded-full text-2xl"
             >
               Brawl!
             </Button>
