@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type CharacterType = 'boba' | 'coffee' | 'juice' | 'soda' | 'smoothie' | 'milkshake';
+type CharacterType = 'boba' | 'coffee' | 'juice' | 'soda' | 'smoothie' | 'milkshake' | 'pizza' | 'burger' | 'taco' | 'hotdog' | 'donut' | 'cupcake' | 'icecream' | 'ramen' | 'sushi' | 'cookie' | 'pretzel' | 'popcorn' | 'nachos' | 'fries' | 'waffle' | 'pancake' | 'croissant' | 'muffin' | 'bagel' | 'sandwich';
 type GameMode = 'solos' | 'teams';
 type Difficulty = 'easy' | 'medium' | 'hard';
-type MapType = 'classic' | 'pillars' | 'open';
+type MapType = 'classic' | 'pillars' | 'open' | 'maze' | 'corners' | 'cross' | 'diamond' | 'rings' | 'scattered' | 'boxes' | 'walls' | 'chambers' | 'grid' | 'plus' | 'circle' | 'zigzag' | 'lanes' | 'fortress' | 'temple' | 'arena' | 'colosseum' | 'dungeon' | 'castle' | 'garden';
 
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 const PLAYER_SIZE = 30;
 const PLAYER_SPEED = 4.5;
 const DASH_SPEED = 18;
-const DASH_DURATION = 120;
+const DASH_DURATION = 60;
+const DASH_COOLDOWN = 800;
 const BOOMERANG_SIZE = 25;
 const BOOMERANG_SPEED = 7;
 const BOOMERANG_RANGE = 250;
@@ -19,7 +20,8 @@ const MELEE_RANGE = 45;
 const MELEE_DURATION = 150;
 const MELEE_COOLDOWN = 400;
 const WIN_SCORE = 10;
-const CHARACTER_TYPES: CharacterType[] = ['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake'];
+const ROUNDS_TO_UNLOCK = 10;
+const CHARACTER_TYPES: CharacterType[] = ['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake', 'pizza', 'burger', 'taco', 'hotdog', 'donut', 'cupcake', 'icecream', 'ramen', 'sushi', 'cookie', 'pretzel', 'popcorn', 'nachos', 'fries', 'waffle', 'pancake', 'croissant', 'muffin', 'bagel', 'sandwich'];
 
 const MAPS = {
   classic: [
@@ -33,14 +35,115 @@ const MAPS = {
     {x: 250, y: 720 - 250, w: 50, h: 50}, {x: 1280 - 300, y: 720 - 250, w: 50, h: 50},
     {x: 615, y: 150, w: 50, h: 150}, {x: 615, y: 720 - 300, w: 50, h: 150},
   ],
-  open: []
+  open: [],
+  maze: [
+    {x: 200, y: 100, w: 300, h: 40}, {x: 600, y: 100, w: 40, h: 200},
+    {x: 780, y: 100, w: 300, h: 40}, {x: 640, y: 300, w: 40, h: 200},
+    {x: 200, y: 580, w: 300, h: 40}, {x: 780, y: 420, w: 300, h: 40},
+  ],
+  corners: [
+    {x: 100, y: 100, w: 200, h: 100}, {x: 980, y: 100, w: 200, h: 100},
+    {x: 100, y: 520, w: 200, h: 100}, {x: 980, y: 520, w: 200, h: 100},
+  ],
+  cross: [
+    {x: 540, y: 100, w: 200, h: 200}, {x: 540, y: 420, w: 200, h: 200},
+    {x: 200, y: 280, w: 200, h: 160}, {x: 880, y: 280, w: 200, h: 160},
+  ],
+  diamond: [
+    {x: 540, y: 60, w: 200, h: 60}, {x: 200, y: 330, w: 200, h: 60},
+    {x: 880, y: 330, w: 200, h: 60}, {x: 540, y: 600, w: 200, h: 60},
+  ],
+  rings: [
+    {x: 350, y: 200, w: 580, h: 40}, {x: 350, y: 480, w: 580, h: 40},
+    {x: 350, y: 200, w: 40, h: 320}, {x: 890, y: 200, w: 40, h: 320},
+  ],
+  scattered: [
+    {x: 150, y: 150, w: 80, h: 80}, {x: 400, y: 100, w: 60, h: 120},
+    {x: 800, y: 150, w: 100, h: 70}, {x: 1050, y: 100, w: 80, h: 100},
+    {x: 200, y: 450, w: 90, h: 90}, {x: 950, y: 500, w: 110, h: 80},
+  ],
+  boxes: [
+    {x: 250, y: 150, w: 100, h: 100}, {x: 930, y: 150, w: 100, h: 100},
+    {x: 250, y: 470, w: 100, h: 100}, {x: 930, y: 470, w: 100, h: 100},
+    {x: 590, y: 310, w: 100, h: 100},
+  ],
+  walls: [
+    {x: 400, y: 100, w: 40, h: 520}, {x: 840, y: 100, w: 40, h: 520},
+    {x: 200, y: 340, w: 200, h: 40}, {x: 880, y: 340, w: 200, h: 40},
+  ],
+  chambers: [
+    {x: 320, y: 100, w: 40, h: 250}, {x: 320, y: 370, w: 40, h: 250},
+    {x: 920, y: 100, w: 40, h: 250}, {x: 920, y: 370, w: 40, h: 250},
+    {x: 560, y: 280, w: 160, h: 160},
+  ],
+  grid: [
+    {x: 300, y: 180, w: 40, h: 360}, {x: 640, y: 180, w: 40, h: 360},
+    {x: 980, y: 180, w: 40, h: 360}, {x: 180, y: 300, w: 920, h: 40},
+    {x: 180, y: 420, w: 920, h: 40},
+  ],
+  plus: [
+    {x: 540, y: 50, w: 200, h: 250}, {x: 540, y: 420, w: 200, h: 250},
+    {x: 180, y: 280, w: 360, h: 160}, {x: 740, y: 280, w: 360, h: 160},
+  ],
+  circle: [
+    {x: 440, y: 150, w: 400, h: 50}, {x: 440, y: 520, w: 400, h: 50},
+    {x: 440, y: 150, w: 50, h: 420}, {x: 790, y: 150, w: 50, h: 420},
+  ],
+  zigzag: [
+    {x: 100, y: 120, w: 300, h: 40}, {x: 880, y: 240, w: 300, h: 40},
+    {x: 100, y: 360, w: 300, h: 40}, {x: 880, y: 480, w: 300, h: 40},
+    {x: 100, y: 600, w: 300, h: 40},
+  ],
+  lanes: [
+    {x: 360, y: 50, w: 40, h: 620}, {x: 880, y: 50, w: 40, h: 620},
+    {x: 200, y: 200, w: 160, h: 40}, {x: 920, y: 480, w: 160, h: 40},
+  ],
+  fortress: [
+    {x: 150, y: 150, w: 150, h: 50}, {x: 980, y: 150, w: 150, h: 50},
+    {x: 150, y: 520, w: 150, h: 50}, {x: 980, y: 520, w: 150, h: 50},
+    {x: 540, y: 100, w: 200, h: 40}, {x: 540, y: 580, w: 200, h: 40},
+  ],
+  temple: [
+    {x: 200, y: 250, w: 50, h: 220}, {x: 1030, y: 250, w: 50, h: 220},
+    {x: 450, y: 250, w: 50, h: 220}, {x: 780, y: 250, w: 50, h: 220},
+    {x: 540, y: 100, w: 200, h: 100}, {x: 540, y: 520, w: 200, h: 100},
+  ],
+  arena: [
+    {x: 300, y: 100, w: 680, h: 40}, {x: 300, y: 580, w: 680, h: 40},
+    {x: 300, y: 100, w: 40, h: 520}, {x: 940, y: 100, w: 40, h: 520},
+  ],
+  colosseum: [
+    {x: 250, y: 80, w: 780, h: 50}, {x: 250, y: 590, w: 780, h: 50},
+    {x: 250, y: 80, w: 50, h: 560}, {x: 980, y: 80, w: 50, h: 560},
+    {x: 590, y: 310, w: 100, h: 100},
+  ],
+  dungeon: [
+    {x: 200, y: 200, w: 40, h: 320}, {x: 400, y: 200, w: 40, h: 320},
+    {x: 840, y: 200, w: 40, h: 320}, {x: 1040, y: 200, w: 40, h: 320},
+    {x: 540, y: 80, w: 200, h: 80}, {x: 540, y: 560, w: 200, h: 80},
+  ],
+  castle: [
+    {x: 150, y: 100, w: 120, h: 520}, {x: 1010, y: 100, w: 120, h: 520},
+    {x: 420, y: 280, w: 40, h: 160}, {x: 820, y: 280, w: 40, h: 160},
+    {x: 540, y: 50, w: 200, h: 80},
+  ],
+  garden: [
+    {x: 200, y: 180, w: 80, h: 80}, {x: 380, y: 180, w: 80, h: 80},
+    {x: 820, y: 180, w: 80, h: 80}, {x: 1000, y: 180, w: 80, h: 80},
+    {x: 200, y: 460, w: 80, h: 80}, {x: 380, y: 460, w: 80, h: 80},
+    {x: 820, y: 460, w: 80, h: 80}, {x: 1000, y: 460, w: 80, h: 80},
+  ]
 };
 
 const SPAWN_POINTS = [
   {x: 150, y: 150},
-  {x: BASE_WIDTH - 150, y: BASE_HEIGHT - 150},
+  {x: BASE_WIDTH - 150, y: 150},
   {x: 150, y: BASE_HEIGHT - 150},
-  {x: BASE_WIDTH - 150, y: 150}
+  {x: BASE_WIDTH - 150, y: BASE_HEIGHT - 150},
+  {x: BASE_WIDTH / 2, y: 150},
+  {x: BASE_WIDTH / 2, y: BASE_HEIGHT - 150},
+  {x: 150, y: BASE_HEIGHT / 2},
+  {x: BASE_WIDTH - 150, y: BASE_HEIGHT / 2}
 ];
 
 interface PlayerInfo {
@@ -64,9 +167,11 @@ class Player {
   boomerangCount: number;
   isDashing: boolean;
   dashTimer: number;
+  dashCooldown: number;
   dx: number;
   dy: number;
   stunTimer: number;
+  deathTimer: number;
   lastMoveDir: {x: number, y: number};
   lastAimDir: {x: number, y: number};
   team: number;
@@ -96,9 +201,11 @@ class Player {
     this.boomerangCount = 1;
     this.isDashing = false;
     this.dashTimer = 0;
+    this.dashCooldown = 0;
     this.dx = 0;
     this.dy = 0;
     this.stunTimer = 0;
+    this.deathTimer = 0;
     this.lastMoveDir = { x: 1, y: 0 };
     this.lastAimDir = { x: 1, y: 0 };
     this.team = team;
@@ -117,10 +224,20 @@ class Player {
   update(keys: Record<string, boolean>, mousePos: {x: number, y: number}, 
          players: Player[], boomerangs: Boomerang[], obstacles: Obstacle[], 
          createParticle: (x: number, y: number, color: string, count?: number, decay?: number, speed?: number) => void) {
+    if (this.stunTimer > 0 && this.stunTimer <= 1000 / 60) {
+      this.deathTimer = 2000;
+      this.isEliminated = true;
+    }
+    
+    if (this.isEliminated && this.deathTimer > 0) {
+      this.deathTimer -= 1000/60;
+    }
+    
     if (this.isEliminated) return;
     
     if (this.hitTimer > 0) this.hitTimer -= 1000/60;
     if (this.hitCooldown > 0) this.hitCooldown -= 1000/60;
+    if (this.dashCooldown > 0) this.dashCooldown -= 1000/60;
     if (this.hitTimer <= 0) this.isHitting = false;
 
     if (this.isBot) {
@@ -144,7 +261,6 @@ class Player {
                     obstacles: Obstacle[]) {
     if (this.stunTimer > 0) {
       this.stunTimer -= 1000 / 60;
-      if (this.stunTimer <= 0) this.isEliminated = true;
       return;
     }
 
@@ -177,7 +293,6 @@ class Player {
   handleBotAI(players: Player[], boomerangs: Boomerang[], obstacles: Obstacle[]) {
     if (this.stunTimer > 0) {
       this.stunTimer -= 1000 / 60;
-      if (this.stunTimer <= 0) this.isEliminated = true;
       return;
     }
 
@@ -310,9 +425,10 @@ class Player {
   }
 
   handleDash(keys: Record<string, boolean>) {
-    if (keys[this.controls.dash] && !this.isDashing && !this.isHitting) {
+    if (keys[this.controls.dash] && !this.isDashing && !this.isHitting && this.dashCooldown <= 0) {
       this.isDashing = true;
       this.dashTimer = DASH_DURATION;
+      this.dashCooldown = DASH_COOLDOWN;
       this.dx = this.lastMoveDir.x;
       this.dy = this.lastMoveDir.y;
     }
@@ -358,8 +474,10 @@ class Player {
     ctx.fillStyle = this.color;
     if (this.stunTimer > 0) {
       ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 50) * 0.2;
+    } else if (this.isEliminated && this.deathTimer > 0) {
+      ctx.globalAlpha = Math.max(0.1, this.deathTimer / 2000);
     } else if (this.isEliminated) {
-      ctx.globalAlpha = 0.4;
+      return;
     }
 
     if (this.isHitting && !preview) {
@@ -371,24 +489,32 @@ class Player {
     }
 
     switch(this.characterType) {
-      case 'boba':
-        this.drawBoba(ctx, preview);
-        break;
-      case 'coffee':
-        this.drawCoffee(ctx, preview);
-        break;
-      case 'juice':
-        this.drawJuiceBox(ctx, preview);
-        break;
-      case 'soda':
-        this.drawSoda(ctx, preview);
-        break;
-      case 'smoothie':
-        this.drawSmoothie(ctx, preview);
-        break;
-      case 'milkshake':
-        this.drawMilkshake(ctx, preview);
-        break;
+      case 'boba': this.drawBoba(ctx, preview); break;
+      case 'coffee': this.drawCoffee(ctx, preview); break;
+      case 'juice': this.drawJuiceBox(ctx, preview); break;
+      case 'soda': this.drawSoda(ctx, preview); break;
+      case 'smoothie': this.drawSmoothie(ctx, preview); break;
+      case 'milkshake': this.drawMilkshake(ctx, preview); break;
+      case 'pizza': this.drawPizza(ctx, preview); break;
+      case 'burger': this.drawBurger(ctx, preview); break;
+      case 'taco': this.drawTaco(ctx, preview); break;
+      case 'hotdog': this.drawHotdog(ctx, preview); break;
+      case 'donut': this.drawDonut(ctx, preview); break;
+      case 'cupcake': this.drawCupcake(ctx, preview); break;
+      case 'icecream': this.drawIcecream(ctx, preview); break;
+      case 'ramen': this.drawRamen(ctx, preview); break;
+      case 'sushi': this.drawSushi(ctx, preview); break;
+      case 'cookie': this.drawCookie(ctx, preview); break;
+      case 'pretzel': this.drawPretzel(ctx, preview); break;
+      case 'popcorn': this.drawPopcorn(ctx, preview); break;
+      case 'nachos': this.drawNachos(ctx, preview); break;
+      case 'fries': this.drawFries(ctx, preview); break;
+      case 'waffle': this.drawWaffle(ctx, preview); break;
+      case 'pancake': this.drawPancake(ctx, preview); break;
+      case 'croissant': this.drawCroissant(ctx, preview); break;
+      case 'muffin': this.drawMuffin(ctx, preview); break;
+      case 'bagel': this.drawBagel(ctx, preview); break;
+      case 'sandwich': this.drawSandwich(ctx, preview); break;
     }
 
     if (this.boomerangCount > 0 && !preview) {
@@ -422,24 +548,45 @@ class Player {
       ctx.restore();
     }
 
-    ctx.fillStyle = 'white';
-    const eyeX1 = x + this.width * 0.3;
-    const eyeX2 = x + this.width * 0.7;
-    const eyeY = y + this.height * 0.4;
-    ctx.beginPath();
-    ctx.arc(eyeX1, eyeY, 4, 0, Math.PI * 2);
-    ctx.arc(eyeX2, eyeY, 4, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.isEliminated && this.deathTimer > 0 && !preview) {
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      const eyeX1 = x + this.width * 0.3;
+      const eyeX2 = x + this.width * 0.7;
+      const eyeY = y + this.height * 0.4;
+      const xSize = 3;
+      
+      ctx.beginPath();
+      ctx.moveTo(eyeX1 - xSize, eyeY - xSize);
+      ctx.lineTo(eyeX1 + xSize, eyeY + xSize);
+      ctx.moveTo(eyeX1 + xSize, eyeY - xSize);
+      ctx.lineTo(eyeX1 - xSize, eyeY + xSize);
+      ctx.moveTo(eyeX2 - xSize, eyeY - xSize);
+      ctx.lineTo(eyeX2 + xSize, eyeY + xSize);
+      ctx.moveTo(eyeX2 + xSize, eyeY - xSize);
+      ctx.lineTo(eyeX2 - xSize, eyeY + xSize);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'white';
+      const eyeX1 = x + this.width * 0.3;
+      const eyeX2 = x + this.width * 0.7;
+      const eyeY = y + this.height * 0.4;
+      ctx.beginPath();
+      ctx.arc(eyeX1, eyeY, 4, 0, Math.PI * 2);
+      ctx.arc(eyeX2, eyeY, 4, 0, Math.PI * 2);
+      ctx.fill();
 
-    ctx.fillStyle = 'black';
-    const pupilX1 = eyeX1 + this.lastAimDir.x * 1.5;
-    const pupilY1 = eyeY + this.lastAimDir.y * 1.5;
-    const pupilX2 = eyeX2 + this.lastAimDir.x * 1.5;
-    const pupilY2 = eyeY + this.lastAimDir.y * 1.5;
-    ctx.beginPath();
-    ctx.arc(pupilX1, pupilY1, 2, 0, Math.PI * 2);
-    ctx.arc(pupilX2, pupilY2, 2, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = 'black';
+      const pupilX1 = eyeX1 + this.lastAimDir.x * 1.5;
+      const pupilY1 = eyeY + this.lastAimDir.y * 1.5;
+      const pupilX2 = eyeX2 + this.lastAimDir.x * 1.5;
+      const pupilY2 = eyeY + this.lastAimDir.y * 1.5;
+      ctx.beginPath();
+      ctx.arc(pupilX1, pupilY1, 2, 0, Math.PI * 2);
+      ctx.arc(pupilX2, pupilY2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     if (!preview) {
       ctx.save();
@@ -605,6 +752,318 @@ class Player {
     ctx.moveTo(x + this.width * 0.65, y + this.height * 0.3);
     ctx.lineTo(x + this.width * 0.75, y);
     ctx.stroke();
+  }
+
+  drawPizza(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width / 2, y);
+    ctx.lineTo(x + this.width, y + this.height);
+    ctx.lineTo(x, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#dc2626';
+    for (let i = 0; i < 3; i++) {
+      const px = x + this.width * (0.3 + i * 0.2);
+      const py = y + this.height * 0.6;
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawBurger(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#c2410c';
+    ctx.fillRect(x, y, this.width, 5);
+    ctx.fillStyle = '#7c2d12';
+    ctx.fillRect(x, y + 7, this.width, 6);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(x, y + 14, this.width, 6);
+    ctx.fillStyle = '#c2410c';
+    ctx.fillRect(x, y + 21, this.width, 9);
+  }
+
+  drawTaco(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 2, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(x + 5, y + 10, this.width - 10, 8);
+  }
+
+  drawHotdog(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(x, y + 8, this.width, 14);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(x + 3, y + 10, this.width - 6, 10);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 12);
+    ctx.quadraticCurveTo(x + 15, y + 10, x + 22, y + 12);
+    ctx.stroke();
+  }
+
+  drawDonut(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawCupcake(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#ec4899';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + 10, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(x + 5, y + 15);
+    ctx.lineTo(x + this.width - 5, y + 15);
+    ctx.lineTo(x + this.width - 2, y + this.height);
+    ctx.lineTo(x + 2, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawIcecream(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width / 2, y + this.height);
+    ctx.lineTo(x + 5, y + 12);
+    ctx.lineTo(x + this.width - 5, y + 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ec4899';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + 8, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawRamen(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(x, y + 10, this.width, this.height - 10);
+    ctx.fillStyle = '#fbbf24';
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + 5 + i * 5, y + 12);
+      ctx.quadraticCurveTo(x + 7 + i * 5, y + 18, x + 5 + i * 5, y + 24);
+      ctx.stroke();
+    }
+  }
+
+  drawSushi(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(x, y + 15, this.width, 10);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(x + 3, y + 17, this.width - 6, 6);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(x + 5, y + 5, this.width - 10, 8);
+  }
+
+  drawCookie(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#c2410c';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#451a03';
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      const px = x + this.width / 2 + Math.cos(angle) * 8;
+      const py = y + this.height / 2 + Math.sin(angle) * 8;
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawPretzel(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x + 5, y + 25);
+    ctx.quadraticCurveTo(x + 15, y, x + 25, y + 25);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 5, y + 25);
+    ctx.quadraticCurveTo(x + 15, y + 30, x + 25, y + 25);
+    ctx.stroke();
+  }
+
+  drawPopcorn(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(x + 5, y + 10);
+    ctx.lineTo(x + this.width - 5, y + 10);
+    ctx.lineTo(x + this.width, y + this.height);
+    ctx.lineTo(x, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fef3c7';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(x + 8 + i * 7, y + 8, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawNachos(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width / 2, y);
+    ctx.lineTo(x + this.width, y + this.height);
+    ctx.lineTo(x, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fb923c';
+    ctx.beginPath();
+    ctx.moveTo(x + this.width / 2, y + 5);
+    ctx.lineTo(x + this.width - 5, y + this.height - 5);
+    ctx.lineTo(x + 5, y + this.height - 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawFries(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(x, y + 12);
+    ctx.lineTo(x + this.width, y + 12);
+    ctx.lineTo(x + this.width - 3, y + this.height);
+    ctx.lineTo(x + 3, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(x + 4, y, 4, 15);
+    ctx.fillRect(x + 11, y + 3, 4, 12);
+    ctx.fillRect(x + 18, y + 1, 4, 14);
+  }
+
+  drawWaffle(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#c2410c';
+    ctx.fillRect(x, y, this.width, this.height);
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 2;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + (this.width / 3) * i, y);
+      ctx.lineTo(x + (this.width / 3) * i, y + this.height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y + (this.height / 3) * i);
+      ctx.lineTo(x + this.width, y + (this.height / 3) * i);
+      ctx.stroke();
+    }
+  }
+
+  drawPancake(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.ellipse(x + this.width / 2, y + 8, 12, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x + this.width / 2, y + 15, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x + this.width / 2, y + 22, 14, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawCroissant(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.moveTo(x, y + this.height / 2);
+    ctx.quadraticCurveTo(x + 10, y, x + this.width, y + this.height / 2);
+    ctx.quadraticCurveTo(x + 10, y + this.height, x, y + this.height / 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawMuffin(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#92400e';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + 10, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#c2410c';
+    ctx.beginPath();
+    ctx.moveTo(x + 3, y + 15);
+    ctx.lineTo(x + this.width - 3, y + 15);
+    ctx.lineTo(x + this.width - 2, y + this.height);
+    ctx.lineTo(x + 2, y + this.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawBagel(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#c2410c';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.arc(x + this.width / 2, y + this.height / 2, this.width / 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawSandwich(ctx: CanvasRenderingContext2D, preview = false) {
+    const x = preview ? 0 : this.x;
+    const y = preview ? 0 : this.y;
+    ctx.fillStyle = '#c2410c';
+    ctx.fillRect(x, y, this.width, 6);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(x, y + 7, this.width, 5);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(x, y + 13, this.width, 5);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(x, y + 19, this.width, 5);
+    ctx.fillStyle = '#c2410c';
+    ctx.fillRect(x, y + 25, this.width, 6);
   }
 }
 
@@ -817,6 +1276,8 @@ export const Game = () => {
   const [winnerSubtext, setWinnerSubtext] = useState('');
   const [scoreInfo, setScoreInfo] = useState<{name: string, score: number, color: string}[]>([]);
   const [botCursors, setBotCursors] = useState<{x: number, y: number, targetChar: CharacterType, progress: number}[]>([]);
+  const [unlockedCharacters, setUnlockedCharacters] = useState<Set<CharacterType>>(new Set(['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake']));
+  const [totalRoundsPlayed, setTotalRoundsPlayed] = useState(0);
   
   const gameStateRef = useRef({
     players: [] as Player[],
@@ -830,6 +1291,7 @@ export const Game = () => {
     keys: {} as Record<string, boolean>,
     mousePos: {x: 0, y: 0},
     animationId: null as number | null,
+    usedSpawnIndices: [] as number[],
   });
 
   useEffect(() => {
@@ -941,32 +1403,36 @@ export const Game = () => {
   }, []);
 
   const drawCharacterPreviews = () => {
-    CHARACTER_TYPES.forEach(charType => {
-      const previewCanvas = document.getElementById(`${charType}-preview`) as HTMLCanvasElement;
-      if (!previewCanvas) return;
-      const pCtx = previewCanvas.getContext('2d');
-      if (!pCtx) return;
-      pCtx.clearRect(0, 0, 80, 80);
-      
-      const tempPlayer = new Player(0, 0, '#6b7280', {}, '', charType as CharacterType, 0, 1);
-      
-      pCtx.save();
-      pCtx.translate(10, 10);
-      pCtx.scale(2, 2);
-      tempPlayer.draw(pCtx, true);
-      pCtx.restore();
-    });
+    setTimeout(() => {
+      CHARACTER_TYPES.forEach(charType => {
+        const previewCanvas = document.getElementById(`${charType}-preview`) as HTMLCanvasElement;
+        if (!previewCanvas) return;
+        const pCtx = previewCanvas.getContext('2d');
+        if (!pCtx) return;
+        const width = previewCanvas.width;
+        const height = previewCanvas.height;
+        pCtx.clearRect(0, 0, width, height);
+        
+        const tempPlayer = new Player(0, 0, '#6b7280', {}, '', charType as CharacterType, 0, 1);
+        
+        pCtx.save();
+        pCtx.translate(width / 2 - PLAYER_SIZE / 2, height / 2 - PLAYER_SIZE / 2);
+        tempPlayer.draw(pCtx, true);
+        pCtx.restore();
+      });
+    }, 100);
   };
 
   useEffect(() => {
     if (showCharacterSelect && totalBrawlers > 1) {
       const numBots = totalBrawlers - 1;
       const newBotCursors = [];
+      const availableChars = Array.from(unlockedCharacters);
       for (let i = 0; i < numBots; i++) {
         newBotCursors.push({
           x: Math.random() * 400 + 100,
           y: Math.random() * 300 + 100,
-          targetChar: CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)],
+          targetChar: availableChars[Math.floor(Math.random() * availableChars.length)],
           progress: 0
         });
       }
@@ -986,7 +1452,7 @@ export const Game = () => {
             return {
               x: targetX,
               y: targetY,
-              targetChar: CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)],
+              targetChar: availableChars[Math.floor(Math.random() * availableChars.length)],
               progress: 0
             };
           }
@@ -1002,7 +1468,7 @@ export const Game = () => {
 
       return () => clearInterval(interval);
     }
-  }, [showCharacterSelect, totalBrawlers]);
+  }, [showCharacterSelect, totalBrawlers, unlockedCharacters]);
 
   const createParticle = (x: number, y: number, color: string, count = 20, decay = 0.95, speed = 4) => {
     gameStateRef.current.particles.push(new Particle(x, y, color, count, decay, speed));
@@ -1055,14 +1521,11 @@ export const Game = () => {
     gameStateRef.current.particles = [];
     gameStateRef.current.players = [];
     gameStateRef.current.keys = {};
+    gameStateRef.current.usedSpawnIndices = [];
     
     setupMap();
-    
-    let spawns = [...SPAWN_POINTS];
-    shuffleArray(spawns);
 
     gameStateRef.current.playerInfo.forEach((info, index) => {
-      const spawn = spawns[index % spawns.length];
       let x, y;
       if (selectedMode === 'teams') {
         if (info.team === 1) {
@@ -1071,11 +1534,17 @@ export const Game = () => {
           x = BASE_WIDTH - 150 - (index % 2 * 50); y = BASE_HEIGHT / 2 - 50 + (index % 2 * 100);
         }
       } else {
+        let spawnIndex;
+        do {
+          spawnIndex = Math.floor(Math.random() * SPAWN_POINTS.length);
+        } while (gameStateRef.current.usedSpawnIndices.includes(spawnIndex));
+        gameStateRef.current.usedSpawnIndices.push(spawnIndex);
+        const spawn = SPAWN_POINTS[spawnIndex];
         x = spawn.x; y = spawn.y;
       }
       
       gameStateRef.current.players.push(
-        new Player(x, y, info.color, info.isBot ? {} : { up: 'w', down: 's', left: 'a', right: 'd', dash: 'e' }, 
+        new Player(x, y, info.color, info.isBot ? {} : { up: 'w', down: 's', left: 'a', right: 'd', dash: ' ' }, 
                    info.name, info.character, info.team, index + 1, info.isBot, selectedDifficulty)
       );
     });
@@ -1168,6 +1637,32 @@ export const Game = () => {
           if (winnerIndex !== -1) gameStateRef.current.matchScores[winnerIndex]++;
         }
       }
+      
+      // Drop boomerang after 2 seconds for dead players
+      gameStateRef.current.players.forEach(p => {
+        if (p.isEliminated && p.deathTimer > 0 && p.boomerangCount > 0) {
+          setTimeout(() => {
+            if (p.deathTimer <= 0) {
+              gameStateRef.current.boomerangs.push(
+                Object.assign(new Boomerang(p.x + p.width / 2, p.y + p.height / 2, 0, 0, p), { isDropped: true })
+              );
+            }
+          }, 2000);
+        }
+      });
+      
+      // Track rounds and unlock characters
+      const newRoundsPlayed = totalRoundsPlayed + 1;
+      setTotalRoundsPlayed(newRoundsPlayed);
+      
+      if (newRoundsPlayed % ROUNDS_TO_UNLOCK === 0) {
+        const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
+        if (lockedChars.length > 0) {
+          const randomChar = lockedChars[Math.floor(Math.random() * lockedChars.length)];
+          setUnlockedCharacters(prev => new Set([...prev, randomChar]));
+        }
+      }
+      
       setTimeout(() => showNextRoundScreen(), 1500);
     }
   };
@@ -1323,7 +1818,7 @@ export const Game = () => {
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">D</kbd> - Move</p>
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
-                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">E</kbd> - Dash</p>
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Spacebar</kbd> - Dash</p>
                 </div>
               </div>
               <div className="bg-muted/50 p-6 rounded-lg border border-border">
@@ -1453,24 +1948,36 @@ export const Game = () => {
       )}
 
       {showCharacterSelect && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-4xl w-full relative">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-6xl w-full relative my-8">
             <h2 className="text-4xl font-bold mb-3">Choose Your Fighter</h2>
-            <p className="text-muted-foreground mb-6">Select from {CHARACTER_TYPES.length} unique brawlers!</p>
+            <p className="text-muted-foreground mb-6">Select from {CHARACTER_TYPES.length} unique brawlers! ({unlockedCharacters.size} unlocked)</p>
             
-            <div className="grid grid-cols-3 gap-6 mb-8">
-              {CHARACTER_TYPES.map(char => (
-                <div
-                  key={char}
-                  className={`border-4 rounded-xl p-4 cursor-pointer transition-all ${
-                    selectedCharacter === char ? 'border-primary bg-primary/10 scale-110' : 'border-transparent bg-muted hover:scale-105'
-                  }`}
-                  onClick={() => setSelectedCharacter(char)}
-                >
-                  <canvas id={`${char}-preview`} width="80" height="80" className="mb-2"></canvas>
-                  <p className="font-bold capitalize text-lg">{char}</p>
-                </div>
-              ))}
+            <div className="grid grid-cols-6 gap-4 mb-8 max-h-[500px] overflow-y-auto">
+              {CHARACTER_TYPES.map(char => {
+                const isLocked = !unlockedCharacters.has(char);
+                return (
+                  <div
+                    key={char}
+                    className={`border-4 rounded-xl p-3 transition-all relative ${
+                      isLocked 
+                        ? 'border-muted bg-muted/30 opacity-50 cursor-not-allowed' 
+                        : selectedCharacter === char 
+                          ? 'border-primary bg-primary/10 scale-110 cursor-pointer' 
+                          : 'border-transparent bg-muted hover:scale-105 cursor-pointer'
+                    }`}
+                    onClick={() => !isLocked && setSelectedCharacter(char)}
+                  >
+                    <canvas id={`${char}-preview`} width="60" height="60" className="mb-2 mx-auto"></canvas>
+                    <p className="font-bold capitalize text-sm">{char}</p>
+                    {isLocked && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-4xl">🔒</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {botCursors.map((cursor, i) => (
