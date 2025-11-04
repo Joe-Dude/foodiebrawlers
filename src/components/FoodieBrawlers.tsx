@@ -231,6 +231,15 @@ class Player {
     
     if (this.isEliminated && this.deathTimer > 0) {
       this.deathTimer -= 1000/60;
+      // Drop boomerang when death timer expires
+      if (this.deathTimer <= 0 && this.boomerangCount > 0) {
+        for (let i = 0; i < this.boomerangCount; i++) {
+          boomerangs.push(
+            Object.assign(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, 0, 0, this), { isDropped: true })
+          );
+        }
+        this.boomerangCount = 0;
+      }
     }
     
     if (this.isEliminated) return;
@@ -308,19 +317,52 @@ class Player {
       });
     }
 
+    // Find winning player for teaming behavior
+    const alivePlayers = players.filter(p => !p.isEliminated);
+    let winningPlayer: Player | null = null;
+    if (alivePlayers.length > 2) {
+      const playerScores = new Map<number, number>();
+      alivePlayers.forEach(p => {
+        const score = playerScores.get(p.team) || 0;
+        playerScores.set(p.team, score + 1);
+      });
+      let maxScore = -1;
+      let winningTeam = -1;
+      playerScores.forEach((score, team) => {
+        if (score > maxScore) {
+          maxScore = score;
+          winningTeam = team;
+        }
+      });
+      if (winningTeam !== -1 && winningTeam !== this.team) {
+        winningPlayer = alivePlayers.find(p => p.team === winningTeam) || null;
+      }
+    }
+
     let enemyTarget: Player | null = null;
     let closestEnemyDist = Infinity;
-    players.filter(p => p.team !== this.team && !p.isEliminated).forEach(opponent => {
-      const dist = Math.hypot(this.x - opponent.x, this.y - opponent.y);
-      if (dist < closestEnemyDist) {
-        closestEnemyDist = dist;
-        enemyTarget = opponent;
-      }
-    });
+    
+    // Prioritize winning player if exists
+    if (winningPlayer) {
+      enemyTarget = winningPlayer;
+      closestEnemyDist = Math.hypot(this.x - winningPlayer.x, this.y - winningPlayer.y);
+    } else {
+      players.filter(p => p.team !== this.team && !p.isEliminated).forEach(opponent => {
+        const dist = Math.hypot(this.x - opponent.x, this.y - opponent.y);
+        if (dist < closestEnemyDist) {
+          closestEnemyDist = dist;
+          enemyTarget = opponent;
+        }
+      });
+    }
     if (!enemyTarget) return;
 
     let finalTarget: Player | Boomerang = enemyTarget;
-    if (boomerangTarget && this.boomerangCount === 0) {
+    
+    // Hard bots rush enemies without boomerangs
+    if (this.difficulty === 'hard' && enemyTarget.boomerangCount === 0 && this.boomerangCount > 0) {
+      finalTarget = enemyTarget;
+    } else if (boomerangTarget && this.boomerangCount === 0) {
       finalTarget = boomerangTarget;
     } else if (boomerangTarget && this.boomerangCount === 1 && closestEnemyDist > 300) {
       if (this.difficulty !== 'easy') finalTarget = boomerangTarget;
@@ -343,6 +385,26 @@ class Player {
       this.performHit();
     }
 
+    // Bot dashing based on difficulty
+    const shouldDash = this.difficulty === 'hard' ? Math.random() < 0.05 : 
+                      this.difficulty === 'medium' ? Math.random() < 0.02 : false;
+    if (shouldDash && !this.isDashing && this.dashCooldown <= 0) {
+      this.isDashing = true;
+      this.dashTimer = DASH_DURATION;
+      this.dashCooldown = DASH_COOLDOWN;
+      this.dx = this.lastMoveDir.x;
+      this.dy = this.lastMoveDir.y;
+    }
+
+    if (this.isDashing) {
+      this.x += this.dx * DASH_SPEED;
+      this.y += this.dy * DASH_SPEED;
+      this.dashTimer -= 1000 / 60;
+      if (this.dashTimer <= 0) {
+        this.isDashing = false;
+      }
+    }
+
     if (finalTarget === boomerangTarget) {
       if (distance > 0) {
         this.botMoveTarget = {x: distX/distance, y: distY/distance};
@@ -350,15 +412,21 @@ class Player {
     } else {
       this.botStateTimer -= 1000 / 60;
       if (this.botStateTimer <= 0) {
-        this.botStateTimer = getRandom(500, 1500);
+        const dodgeFreq = this.difficulty === 'medium' ? 0.7 : this.difficulty === 'easy' ? 0.2 : 0.4;
+        this.botStateTimer = getRandom(this.difficulty === 'easy' ? 800 : 300, this.difficulty === 'easy' ? 1500 : 1000);
         const action = Math.random();
         if (distance > 0) {
-          if (action < 0.6) {
+          // Easy: mostly rush straight
+          if (this.difficulty === 'easy') {
+            this.botMoveTarget = {x: distX/distance, y: distY/distance};
+          } else if (action < (1 - dodgeFreq)) {
+            // Rush toward enemy
             this.botMoveTarget = {x: distX/distance, y: distY/distance};
             if (distance < (this.difficulty === 'hard' ? 250 : 200) && this.boomerangCount === 0) {
               this.botMoveTarget = {x: -this.botMoveTarget.x, y: -this.botMoveTarget.y};
             }
           } else {
+            // Dodge/strafe
             this.botMoveTarget = {x: distY/distance, y: -(distX/distance)};
             if (Math.random() < 0.5) {
               this.botMoveTarget = {x: -this.botMoveTarget.x, y: -this.botMoveTarget.y};
@@ -368,24 +436,53 @@ class Player {
       }
     }
 
-    if (!this.isHitting) {
+    if (!this.isHitting && !this.isDashing) {
       const moveX = this.botMoveTarget.x;
       const moveY = this.botMoveTarget.y;
       const magnitude = Math.hypot(moveX, moveY);
       if (magnitude > 0) {
         const newX = this.x + (moveX / magnitude) * this.speed;
         const newY = this.y + (moveY / magnitude) * this.speed;
-        if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
+        
+        // Hard bots strategically avoid obstacles
+        if (this.difficulty === 'hard' && this.isCollidingWithObstacle(newX, newY, obstacles)) {
+          // Try alternative paths
+          const altPaths = [
+            {x: moveY, y: -moveX},
+            {x: -moveY, y: moveX},
+            {x: moveX * 0.5 + moveY * 0.5, y: moveY * 0.5 - moveX * 0.5},
+            {x: moveX * 0.5 - moveY * 0.5, y: moveY * 0.5 + moveX * 0.5}
+          ];
+          
+          for (const alt of altPaths) {
+            const altMag = Math.hypot(alt.x, alt.y);
+            const testX = this.x + (alt.x / altMag) * this.speed;
+            const testY = this.y + (alt.y / altMag) * this.speed;
+            if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
+              this.x = testX;
+              this.y = testY;
+              this.lastMoveDir = { x: alt.x / altMag, y: alt.y / altMag };
+              break;
+            }
+          }
+        } else if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
           this.x = newX;
           this.y = newY;
+          this.lastMoveDir = { x: moveX / magnitude, y: moveY / magnitude };
         } else {
           this.botStateTimer = 0;
         }
-        this.lastMoveDir = { x: moveX / magnitude, y: moveY / magnitude };
       }
     }
 
-    if (this.boomerangCount > 0 && closestEnemyDist < 500 && closestEnemyDist > 100 && Math.random() < this.botThrowChance) {
+    // Bot throwing based on difficulty
+    const throwChance = this.difficulty === 'easy' ? 0.008 : 
+                       this.difficulty === 'medium' ? 0.012 : 0.018;
+    const throwDistMin = this.difficulty === 'easy' ? 80 : this.difficulty === 'medium' ? 100 : 120;
+    const throwDistMax = this.difficulty === 'easy' ? 500 : this.difficulty === 'medium' ? 450 : 400;
+    
+    if (this.boomerangCount > 0 && closestEnemyDist < throwDistMax && 
+        closestEnemyDist > throwDistMin && Math.random() < throwChance) {
       this.boomerangCount--;
       boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, 
                                      this.lastAimDir.x, this.lastAimDir.y, this));
@@ -1275,7 +1372,8 @@ export const Game = () => {
   const [winnerText, setWinnerText] = useState('You Win!');
   const [winnerSubtext, setWinnerSubtext] = useState('');
   const [scoreInfo, setScoreInfo] = useState<{name: string, score: number, color: string}[]>([]);
-  const [botCursors, setBotCursors] = useState<{x: number, y: number, targetChar: CharacterType, progress: number}[]>([]);
+  const [botCursors, setBotCursors] = useState<{x: number, y: number, targetChar: CharacterType, selectTimer: number}[]>([]);
+  const [botSelectedCharacters, setBotSelectedCharacters] = useState<CharacterType[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<Set<CharacterType>>(new Set(['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake']));
   const [totalRoundsPlayed, setTotalRoundsPlayed] = useState(0);
   
@@ -1424,51 +1522,61 @@ export const Game = () => {
   };
 
   useEffect(() => {
-    if (showCharacterSelect && totalBrawlers > 1) {
-      const numBots = totalBrawlers - 1;
-      const newBotCursors = [];
-      const availableChars = Array.from(unlockedCharacters);
-      for (let i = 0; i < numBots; i++) {
-        newBotCursors.push({
-          x: Math.random() * 400 + 100,
-          y: Math.random() * 300 + 100,
-          targetChar: availableChars[Math.floor(Math.random() * availableChars.length)],
-          progress: 0
-        });
-      }
-      setBotCursors(newBotCursors);
-
-      const interval = setInterval(() => {
-        setBotCursors(prev => prev.map(cursor => {
-          const charElement = document.getElementById(`${cursor.targetChar}-preview`);
-          if (!charElement) return cursor;
-          
-          const rect = charElement.getBoundingClientRect();
-          const targetX = rect.left + rect.width / 2 - 300;
-          const targetY = rect.top + rect.height / 2 - 200;
-          
-          const newProgress = cursor.progress + 0.02;
-          if (newProgress >= 1) {
-            return {
-              x: targetX,
-              y: targetY,
-              targetChar: availableChars[Math.floor(Math.random() * availableChars.length)],
-              progress: 0
-            };
-          }
-          
-          return {
-            ...cursor,
-            x: cursor.x + (targetX - cursor.x) * 0.05,
-            y: cursor.y + (targetY - cursor.y) * 0.05,
-            progress: newProgress
-          };
-        }));
-      }, 50);
-
-      return () => clearInterval(interval);
+    if (!showCharacterSelect) return;
+    const numBots = selectedMode === 'solos' ? totalBrawlers - 1 : 3;
+    const availableChars = Array.from(unlockedCharacters);
+    const usedChars = new Set<CharacterType>([selectedCharacter]);
+    const selectedBotChars: CharacterType[] = [];
+    
+    for (let i = 0; i < numBots; i++) {
+      const available = availableChars.filter(c => !usedChars.has(c));
+      const char = available[Math.floor(Math.random() * available.length)] || availableChars[0];
+      selectedBotChars.push(char);
+      usedChars.add(char);
     }
-  }, [showCharacterSelect, totalBrawlers, unlockedCharacters]);
+    setBotSelectedCharacters(selectedBotChars);
+    
+    const newCursors = Array.from({length: numBots}, (_, i) => ({
+      x: Math.random() * 800 + 100,
+      y: Math.random() * 600 + 100,
+      targetChar: selectedBotChars[i],
+      selectTimer: Math.random() * 1000 + 1500 + i * 300
+    }));
+    setBotCursors(newCursors);
+
+    const animateCursors = () => {
+      setBotCursors(prev => prev.map((cursor) => {
+        let newCursor = {...cursor};
+        newCursor.selectTimer -= 16;
+
+        if (newCursor.targetChar) {
+          const charElement = document.getElementById(`${newCursor.targetChar}-preview`);
+          if (charElement) {
+            const rect = charElement.getBoundingClientRect();
+            const modalRect = charElement.closest('.max-w-6xl')?.getBoundingClientRect();
+            if (modalRect) {
+              const targetX = rect.left - modalRect.left + rect.width / 2;
+              const targetY = rect.top - modalRect.top + rect.height / 2;
+              const dx = targetX - newCursor.x;
+              const dy = targetY - newCursor.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist < 5) {
+                newCursor.x = targetX + (Math.random() - 0.5) * 10;
+                newCursor.y = targetY + (Math.random() - 0.5) * 10;
+              } else {
+                newCursor.x += (dx / dist) * Math.min(5, dist);
+                newCursor.y += (dy / dist) * Math.min(5, dist);
+              }
+            }
+          }
+        }
+        return newCursor;
+      }));
+    };
+
+    const interval = setInterval(animateCursors, 16);
+    return () => clearInterval(interval);
+  }, [showCharacterSelect, unlockedCharacters, selectedCharacter, selectedMode, totalBrawlers]);
 
   const createParticle = (x: number, y: number, color: string, count = 20, decay = 0.95, speed = 4) => {
     gameStateRef.current.particles.push(new Particle(x, y, color, count, decay, speed));
@@ -1638,18 +1746,6 @@ export const Game = () => {
         }
       }
       
-      // Drop boomerang after 2 seconds for dead players
-      gameStateRef.current.players.forEach(p => {
-        if (p.isEliminated && p.deathTimer > 0 && p.boomerangCount > 0) {
-          setTimeout(() => {
-            if (p.deathTimer <= 0) {
-              gameStateRef.current.boomerangs.push(
-                Object.assign(new Boomerang(p.x + p.width / 2, p.y + p.height / 2, 0, 0, p), { isDropped: true })
-              );
-            }
-          }, 2000);
-        }
-      });
       
       // Track rounds and unlock characters
       const newRoundsPlayed = totalRoundsPlayed + 1;
@@ -1808,8 +1904,8 @@ export const Game = () => {
       )}
 
       {showHowToPlay && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-2xl">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-5xl font-bold mb-6">How to Play</h2>
             <div className="text-left space-y-6 mb-8">
               <div className="bg-muted/50 p-6 rounded-lg border border-border">
@@ -1847,12 +1943,12 @@ export const Game = () => {
       )}
 
       {showOptions && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-lg">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-10 rounded-2xl shadow-2xl max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-5xl font-bold mb-6">Options</h2>
             <div className="bg-muted/50 p-6 rounded-lg border border-border mb-8">
               <h3 className="font-bold text-2xl text-primary mb-4">Bot Difficulty</h3>
-              <div className="flex justify-center gap-3">
+              <div className="flex justify-center gap-3 flex-wrap">
                 {(['easy', 'medium', 'hard'] as Difficulty[]).map(diff => (
                   <button
                     key={diff}
@@ -1864,6 +1960,11 @@ export const Game = () => {
                     {diff.charAt(0).toUpperCase() + diff.slice(1)}
                   </button>
                 ))}
+              </div>
+              <div className="mt-4 text-sm text-muted-foreground space-y-1">
+                <p><strong>Easy:</strong> Normal speed, rushes straight at enemies</p>
+                <p><strong>Medium:</strong> Dodges often, throws carefully</p>
+                <p><strong>Hard:</strong> Strategic movement, never loses boomerang</p>
               </div>
             </div>
             <Button 
@@ -1880,10 +1981,10 @@ export const Game = () => {
       )}
 
       {showModeSelect && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-2xl w-full">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-4xl font-bold mb-6">Select Game Mode</h2>
-            <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
               <button
                 className={`border-4 rounded-xl p-8 transition-all ${
                   selectedMode === 'solos' ? 'border-primary bg-primary/10 scale-105' : 'border-border hover:scale-105'
@@ -1933,29 +2034,41 @@ export const Game = () => {
                 </div>
               </div>
             )}
-            <Button
-              onClick={() => {
-                setShowModeSelect(false);
-                setShowCharacterSelect(true);
-                setTimeout(drawCharacterPreviews, 100);
-              }}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-12 rounded-full text-2xl"
-            >
-              Next
-            </Button>
+            <div className="flex gap-4 justify-center">
+              <Button
+                onClick={() => {
+                  setShowModeSelect(false);
+                  setShowStartModal(true);
+                }}
+                className="bg-muted hover:bg-muted/90 text-foreground font-bold py-4 px-8 rounded-full text-xl"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowModeSelect(false);
+                  setShowCharacterSelect(true);
+                  setTimeout(drawCharacterPreviews, 100);
+                }}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 px-12 rounded-full text-2xl"
+              >
+                Next
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
       {showCharacterSelect && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-6xl w-full relative my-8">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-6xl w-full relative max-h-[90vh] overflow-y-auto">
             <h2 className="text-4xl font-bold mb-3">Choose Your Fighter</h2>
             <p className="text-muted-foreground mb-6">Select from {CHARACTER_TYPES.length} unique brawlers! ({unlockedCharacters.size} unlocked)</p>
             
-            <div className="grid grid-cols-6 gap-4 mb-8 max-h-[500px] overflow-y-auto">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4 mb-8 max-h-[400px] overflow-y-auto p-2">
               {CHARACTER_TYPES.map(char => {
                 const isLocked = !unlockedCharacters.has(char);
+                const isBotSelected = botSelectedCharacters.includes(char);
                 return (
                   <div
                     key={char}
@@ -1964,7 +2077,9 @@ export const Game = () => {
                         ? 'border-muted bg-muted/30 opacity-50 cursor-not-allowed' 
                         : selectedCharacter === char 
                           ? 'border-primary bg-primary/10 scale-110 cursor-pointer' 
-                          : 'border-transparent bg-muted hover:scale-105 cursor-pointer'
+                          : isBotSelected
+                            ? 'border-accent bg-accent/10 cursor-pointer'
+                            : 'border-transparent bg-muted hover:scale-105 cursor-pointer'
                     }`}
                     onClick={() => !isLocked && setSelectedCharacter(char)}
                   >
@@ -1983,7 +2098,7 @@ export const Game = () => {
             {botCursors.map((cursor, i) => (
               <div
                 key={i}
-                className="absolute pointer-events-none"
+                className="absolute pointer-events-none z-50"
                 style={{
                   left: `${cursor.x}px`,
                   top: `${cursor.y}px`,
@@ -2004,25 +2119,36 @@ export const Game = () => {
               </div>
             ))}
 
-            <Button
-              onClick={() => {
-                setShowCharacterSelect(false);
-                startGame();
-              }}
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-12 rounded-full text-2xl"
-            >
-              Brawl!
-            </Button>
+            <div className="flex gap-4 justify-center">
+              <Button
+                onClick={() => {
+                  setShowCharacterSelect(false);
+                  setShowModeSelect(true);
+                }}
+                className="bg-muted hover:bg-muted/90 text-foreground font-bold py-4 px-8 rounded-full text-xl"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowCharacterSelect(false);
+                  startGame();
+                }}
+                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold py-4 px-12 rounded-full text-2xl"
+              >
+                Brawl!
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
       {showGameOver && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-5xl font-bold mb-4">{winnerText}</h2>
             <p className="text-muted-foreground mb-6">{winnerSubtext}</p>
-            <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4 flex-wrap">
               <Button
                 onClick={() => {
                   setShowGameOver(false);
@@ -2048,11 +2174,11 @@ export const Game = () => {
       )}
 
       {showNextRound && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-md">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-4xl font-bold mb-4">Round Over!</h2>
             <p className="text-lg mb-4 text-muted-foreground">First to {WIN_SCORE} wins</p>
-            <div className="mb-6 space-y-2 text-lg">
+            <div className="mb-6 space-y-2 text-lg max-h-[300px] overflow-y-auto">
               {scoreInfo.map((info, i) => (
                 <div key={i} className="flex justify-between items-center bg-muted/50 p-2 rounded">
                   <span className="font-bold" style={{color: info.color}}>{info.name}</span>
