@@ -185,6 +185,10 @@ class Player {
   speed: number;
   hitCooldown: number;
   botThrowChance: number;
+  isBlocking: boolean;
+  blockCooldown: number;
+  revivalTimer: number;
+  reviver: Player | null;
 
   constructor(x: number, y: number, color: string, controls: any, name: string, 
               characterType: CharacterType, team: number, playerNumber: number, 
@@ -219,6 +223,10 @@ class Player {
     this.speed = isBot ? PLAYER_SPEED * (difficulty === 'easy' ? 0.75 : difficulty === 'hard' ? 1.0 : 0.85) : PLAYER_SPEED;
     this.hitCooldown = 0;
     this.botThrowChance = difficulty === 'easy' ? 0.008 : difficulty === 'hard' ? 0.02 : 0.015;
+    this.isBlocking = false;
+    this.blockCooldown = 0;
+    this.revivalTimer = 0;
+    this.reviver = null;
   }
 
   update(keys: Record<string, boolean>, mousePos: {x: number, y: number}, 
@@ -242,12 +250,44 @@ class Player {
       }
     }
     
-    if (this.isEliminated) return;
+    if (this.isEliminated) {
+      // Check for revival in team mode
+      if (this.deathTimer <= 0) {
+        const revivers = players.filter(p => p.team === this.team && !p.isEliminated);
+        let beingRevived = false;
+        for (const reviver of revivers) {
+          const dist = Math.hypot(reviver.x - this.x, reviver.y - this.y);
+          if (dist < PLAYER_SIZE * 2) {
+            beingRevived = true;
+            this.reviver = reviver;
+            this.revivalTimer += 1000/60;
+            if (this.revivalTimer >= 2000) {
+              // Revive!
+              this.isEliminated = false;
+              this.stunTimer = 0;
+              this.deathTimer = 0;
+              this.revivalTimer = 0;
+              this.reviver = null;
+              this.boomerangCount = 1;
+              createParticle(this.x + this.width / 2, this.y + this.height / 2, this.color, 50, 0.95, 6);
+            }
+            break;
+          }
+        }
+        if (!beingRevived) {
+          this.revivalTimer = 0;
+          this.reviver = null;
+        }
+      }
+      return;
+    }
     
     if (this.hitTimer > 0) this.hitTimer -= 1000/60;
     if (this.hitCooldown > 0) this.hitCooldown -= 1000/60;
     if (this.dashCooldown > 0) this.dashCooldown -= 1000/60;
+    if (this.blockCooldown > 0) this.blockCooldown -= 1000/60;
     if (this.hitTimer <= 0) this.isHitting = false;
+    if (this.blockCooldown <= 0) this.isBlocking = false;
 
     if (this.isBot) {
       this.handleBotAI(players, boomerangs, obstacles);
@@ -476,7 +516,7 @@ class Player {
     }
 
     // Bot throwing based on difficulty
-    const throwChance = this.difficulty === 'easy' ? 0.008 : 
+    let throwChance = this.difficulty === 'easy' ? 0.2 : 
                        this.difficulty === 'medium' ? 0.012 : 0.018;
     const throwDistMin = this.difficulty === 'easy' ? 80 : this.difficulty === 'medium' ? 100 : 120;
     const throwDistMax = this.difficulty === 'easy' ? 500 : this.difficulty === 'medium' ? 450 : 400;
@@ -486,6 +526,21 @@ class Player {
       this.boomerangCount--;
       boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, 
                                      this.lastAimDir.x, this.lastAimDir.y, this));
+    }
+
+    // Hard bots block incoming boomerangs
+    if (this.difficulty === 'hard' && this.boomerangCount > 0 && !this.isBlocking && this.blockCooldown <= 0) {
+      const incomingBoomerangs = boomerangs.filter(b => 
+        !b.isDropped && b.owner.team !== this.team && b.isReturning === false
+      );
+      for (const b of incomingBoomerangs) {
+        const dist = Math.hypot(b.x - (this.x + this.width/2), b.y - (this.y + this.height/2));
+        if (dist < 150) {
+          this.isBlocking = true;
+          this.blockCooldown = 600;
+          break;
+        }
+      }
     }
 
     this.checkBoundaries();
@@ -614,7 +669,7 @@ class Player {
       case 'sandwich': this.drawSandwich(ctx, preview); break;
     }
 
-    if (this.boomerangCount > 0 && !preview) {
+    if (this.boomerangCount > 0 && !preview && !this.isEliminated && this.deathTimer <= 0) {
       const centerX = this.x + this.width / 2;
       const centerY = this.y + this.height / 2;
       const angle = Math.atan2(this.lastAimDir.y, this.lastAimDir.x);
@@ -709,6 +764,31 @@ class Player {
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.arc(centerX, centerY, MELEE_RANGE * 0.8, angle - Math.PI/3, angle + Math.PI/3);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (this.isBlocking && !preview) {
+      const centerX = this.x + this.width / 2;
+      const centerY = this.y + this.height / 2;
+      ctx.save();
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, this.width * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (!preview && this.isEliminated && this.deathTimer <= 0 && this.revivalTimer > 0 && this.reviver) {
+      ctx.save();
+      const progress = this.revivalTimer / 2000;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(this.x + this.width / 2, this.y - 15, 8, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -1450,14 +1530,14 @@ export const Game = () => {
       e.preventDefault();
     };
 
-    const handleMouseDown = (e: MouseEvent) => {
+  const handleMouseDown = (e: MouseEvent) => {
       const { isGameOver, isRoundOver, players, boomerangs } = gameStateRef.current;
       if (isGameOver || isRoundOver || !players.length) return;
       
       const player = players.find(p => !p.isBot);
       if (!player) return;
 
-      if (e.button === 0 && player.boomerangCount > 0) {
+      if (e.button === 0 && player.boomerangCount > 0 && !player.isBlocking) {
         player.boomerangCount--;
         const centerX = player.x + player.width / 2;
         const centerY = player.y + player.height / 2;
@@ -1472,7 +1552,12 @@ export const Game = () => {
       }
 
       if (e.button === 2) {
-        player.performHit();
+        if (player.boomerangCount > 0 && player.blockCooldown <= 0) {
+          player.isBlocking = true;
+          player.blockCooldown = 600;
+        } else {
+          player.performHit();
+        }
       }
     };
 
@@ -1668,8 +1753,14 @@ export const Game = () => {
         
         const hitDist = p.width / 2;
         if (Math.hypot(b.x - (p.x + p.width/2), b.y - (p.y + p.height/2)) < hitDist) {
-          p.stunTimer = 1000;
-          createParticle(p.x + p.width/2, p.y + p.height/2, '#FBBF24', 50, 0.96, 5);
+          // Check if blocking
+          if (p.isBlocking && p.boomerangCount > 0) {
+            b.isDropped = true;
+            createParticle(b.x, b.y, p.color, 30, 0.93, 4);
+          } else {
+            p.stunTimer = 1000;
+            createParticle(p.x + p.width/2, p.y + p.height/2, '#FBBF24', 50, 0.96, 5);
+          }
         }
       });
     });
@@ -1751,15 +1842,28 @@ export const Game = () => {
       const newRoundsPlayed = totalRoundsPlayed + 1;
       setTotalRoundsPlayed(newRoundsPlayed);
       
+      let unlockedNewChar = false;
       if (newRoundsPlayed % ROUNDS_TO_UNLOCK === 0) {
         const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
         if (lockedChars.length > 0) {
           const randomChar = lockedChars[Math.floor(Math.random() * lockedChars.length)];
           setUnlockedCharacters(prev => new Set([...prev, randomChar]));
+          unlockedNewChar = true;
         }
       }
       
-      setTimeout(() => showNextRoundScreen(), 1500);
+      setTimeout(() => {
+        const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
+        const roundsUntilUnlock = ROUNDS_TO_UNLOCK - (newRoundsPlayed % ROUNDS_TO_UNLOCK);
+        
+        if (!unlockedNewChar && lockedChars.length > 0 && roundsUntilUnlock > 0) {
+          alert(`Play ${roundsUntilUnlock} more round${roundsUntilUnlock === 1 ? '' : 's'} to unlock a new character!`);
+        } else if (unlockedNewChar) {
+          alert(`New character unlocked! Play ${ROUNDS_TO_UNLOCK} more rounds to unlock another!`);
+        }
+        
+        showNextRoundScreen();
+      }, 1500);
     }
   };
 
@@ -1913,7 +2017,7 @@ export const Game = () => {
                 <div className="space-y-2">
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">W</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">A</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">S</kbd> <kbd className="font-sans bg-muted rounded px-2 py-1">D</kbd> - Move</p>
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Left Click</kbd> - Throw Boomerang</p>
-                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Melee Hit</p>
+                  <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Right Click</kbd> - Block (with boomerang) or Melee Hit</p>
                   <p className="text-foreground"><kbd className="font-sans bg-muted rounded px-2 py-1">Spacebar</kbd> - Dash</p>
                 </div>
               </div>
@@ -1923,9 +2027,12 @@ export const Game = () => {
                   <li>Be the last brawler standing to win a round</li>
                   <li>First player to {WIN_SCORE} rounds wins the match</li>
                   <li>Throw boomerangs to stun opponents from distance</li>
-                  <li>Use melee attacks when close to enemies</li>
+                  <li>Block incoming boomerangs with right-click (requires boomerang)</li>
+                  <li>Use melee attacks when close to enemies (or when no boomerang)</li>
                   <li>Dash to dodge attacks and reposition quickly</li>
                   <li>Pick up dropped boomerangs to reload</li>
+                  <li>In team mode, stand near fallen teammates for 2 seconds to revive them</li>
+                  <li>Play {ROUNDS_TO_UNLOCK} rounds to unlock new characters</li>
                 </ul>
               </div>
             </div>
@@ -1962,9 +2069,9 @@ export const Game = () => {
                 ))}
               </div>
               <div className="mt-4 text-sm text-muted-foreground space-y-1">
-                <p><strong>Easy:</strong> Normal speed, rushes straight at enemies</p>
+                <p><strong>Easy:</strong> Constantly throws boomerangs, rushes straight at enemies</p>
                 <p><strong>Medium:</strong> Dodges often, throws carefully</p>
-                <p><strong>Hard:</strong> Strategic movement, never loses boomerang</p>
+                <p><strong>Hard:</strong> Blocks all boomerangs, strategic movement, never loses boomerang</p>
               </div>
             </div>
             <Button 
