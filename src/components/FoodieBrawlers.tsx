@@ -20,7 +20,7 @@ const MELEE_RANGE = 45;
 const MELEE_DURATION = 150;
 const MELEE_COOLDOWN = 400;
 const WIN_SCORE = 10;
-const ROUNDS_TO_UNLOCK = 10;
+const ROUNDS_TO_UNLOCK = 5;
 const CHARACTER_TYPES: CharacterType[] = ['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake', 'pizza', 'burger', 'taco', 'hotdog', 'donut', 'cupcake', 'icecream', 'ramen', 'sushi', 'cookie', 'pretzel', 'popcorn', 'nachos', 'fries', 'waffle', 'pancake', 'croissant', 'muffin', 'bagel', 'sandwich'];
 
 const MAPS = {
@@ -484,26 +484,36 @@ class Player {
         const newX = this.x + (moveX / magnitude) * this.speed;
         const newY = this.y + (moveY / magnitude) * this.speed;
         
-        // Hard bots strategically avoid obstacles
-        if (this.difficulty === 'hard' && this.isCollidingWithObstacle(newX, newY, obstacles)) {
-          // Try alternative paths
+        // All bots now strategically avoid obstacles
+        if (this.isCollidingWithObstacle(newX, newY, obstacles)) {
+          // Try alternative paths - perpendicular and diagonal options
           const altPaths = [
-            {x: moveY, y: -moveX},
-            {x: -moveY, y: moveX},
-            {x: moveX * 0.5 + moveY * 0.5, y: moveY * 0.5 - moveX * 0.5},
-            {x: moveX * 0.5 - moveY * 0.5, y: moveY * 0.5 + moveX * 0.5}
+            {x: moveY, y: -moveX},  // perpendicular right
+            {x: -moveY, y: moveX},  // perpendicular left
+            {x: moveX * 0.7 + moveY * 0.7, y: moveY * 0.7 - moveX * 0.7},  // diagonal right
+            {x: moveX * 0.7 - moveY * 0.7, y: moveY * 0.7 + moveX * 0.7},  // diagonal left
+            {x: -moveX * 0.3 + moveY, y: -moveY * 0.3 - moveX},  // back and around
+            {x: -moveX * 0.3 - moveY, y: -moveY * 0.3 + moveX}   // back and around other way
           ];
           
+          let moved = false;
           for (const alt of altPaths) {
             const altMag = Math.hypot(alt.x, alt.y);
+            if (altMag === 0) continue;
             const testX = this.x + (alt.x / altMag) * this.speed;
             const testY = this.y + (alt.y / altMag) * this.speed;
             if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
               this.x = testX;
               this.y = testY;
               this.lastMoveDir = { x: alt.x / altMag, y: alt.y / altMag };
+              moved = true;
               break;
             }
+          }
+          
+          // If no path found, reset state timer to recalculate target
+          if (!moved) {
+            this.botStateTimer = 0;
           }
         } else if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
           this.x = newX;
@@ -1444,6 +1454,8 @@ export const Game = () => {
   const [showCharacterSelect, setShowCharacterSelect] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [showNextRound, setShowNextRound] = useState(false);
+  const [showUnlockNotification, setShowUnlockNotification] = useState(false);
+  const [unlockNotificationText, setUnlockNotificationText] = useState('');
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterType>('boba');
   const [selectedMode, setSelectedMode] = useState<GameMode>('solos');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
@@ -1690,16 +1702,16 @@ export const Game = () => {
     if (selectedMode === 'solos') {
       const botCount = totalBrawlers - 1;
       for (let i = 0; i < botCount; i++) {
-        const botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
+        const botType = botSelectedCharacters[i] || CHARACTER_TYPES[0];
         info.push({ name: `Bot ${i+1}`, color: botColors[i], character: botType, isBot: true, team: 2 + i });
       }
     } else {
-      let botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
-      info.push({ name: 'Ally Bot', color: playerTeamColor, character: botType, isBot: true, team: 1 });
-      botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
-      info.push({ name: 'Enemy 1', color: botColors[0], character: botType, isBot: true, team: 2 });
-      botType = CHARACTER_TYPES[Math.floor(Math.random() * CHARACTER_TYPES.length)];
-      info.push({ name: 'Enemy 2', color: botColors[0], character: botType, isBot: true, team: 2 });
+      const botType1 = botSelectedCharacters[0] || CHARACTER_TYPES[0];
+      info.push({ name: 'Ally Bot', color: playerTeamColor, character: botType1, isBot: true, team: 1 });
+      const botType2 = botSelectedCharacters[1] || CHARACTER_TYPES[1];
+      info.push({ name: 'Enemy 1', color: botColors[0], character: botType2, isBot: true, team: 2 });
+      const botType3 = botSelectedCharacters[2] || CHARACTER_TYPES[2];
+      info.push({ name: 'Enemy 2', color: botColors[0], character: botType3, isBot: true, team: 2 });
     }
 
     gameStateRef.current.playerInfo = info;
@@ -1838,32 +1850,11 @@ export const Game = () => {
       }
       
       
-      // Track rounds and unlock characters
+      // Track rounds
       const newRoundsPlayed = totalRoundsPlayed + 1;
       setTotalRoundsPlayed(newRoundsPlayed);
       
-      let unlockedNewChar = false;
-      if (newRoundsPlayed % ROUNDS_TO_UNLOCK === 0) {
-        const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
-        if (lockedChars.length > 0) {
-          const randomChar = lockedChars[Math.floor(Math.random() * lockedChars.length)];
-          setUnlockedCharacters(prev => new Set([...prev, randomChar]));
-          unlockedNewChar = true;
-        }
-      }
-      
-      setTimeout(() => {
-        const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
-        const roundsUntilUnlock = ROUNDS_TO_UNLOCK - (newRoundsPlayed % ROUNDS_TO_UNLOCK);
-        
-        if (!unlockedNewChar && lockedChars.length > 0 && roundsUntilUnlock > 0) {
-          alert(`Play ${roundsUntilUnlock} more round${roundsUntilUnlock === 1 ? '' : 's'} to unlock a new character!`);
-        } else if (unlockedNewChar) {
-          alert(`New character unlocked! Play ${ROUNDS_TO_UNLOCK} more rounds to unlock another!`);
-        }
-        
-        showNextRoundScreen();
-      }, 1500);
+      setTimeout(() => showNextRoundScreen(), 1500);
     }
   };
 
@@ -1911,6 +1902,29 @@ export const Game = () => {
       const winnerInfo = gameStateRef.current.playerInfo[winnerIndex];
       setWinnerText(`${winnerInfo.name.replace('Player 1', 'You')} Won!`);
       setWinnerSubtext(`With a final score of ${highScore}!`);
+    }
+    
+    // Check for character unlocks at end of game
+    let unlockedNewChar = false;
+    if (totalRoundsPlayed % ROUNDS_TO_UNLOCK === 0) {
+      const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
+      if (lockedChars.length > 0) {
+        const randomChar = lockedChars[Math.floor(Math.random() * lockedChars.length)];
+        setUnlockedCharacters(prev => new Set([...prev, randomChar]));
+        unlockedNewChar = true;
+      }
+    }
+    
+    // Show unlock notification
+    const lockedChars = CHARACTER_TYPES.filter(char => !unlockedCharacters.has(char));
+    const roundsUntilUnlock = ROUNDS_TO_UNLOCK - (totalRoundsPlayed % ROUNDS_TO_UNLOCK);
+    
+    if (unlockedNewChar) {
+      setUnlockNotificationText(`🎉 New character unlocked! Play ${ROUNDS_TO_UNLOCK} more rounds to unlock another!`);
+      setShowUnlockNotification(true);
+    } else if (lockedChars.length > 0 && roundsUntilUnlock > 0) {
+      setUnlockNotificationText(`Play ${roundsUntilUnlock} more round${roundsUntilUnlock === 1 ? '' : 's'} to unlock a new character!`);
+      setShowUnlockNotification(true);
     }
     
     setShowGameOver(true);
@@ -2255,10 +2269,18 @@ export const Game = () => {
           <div className="bg-card text-card-foreground text-center p-8 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-5xl font-bold mb-4">{winnerText}</h2>
             <p className="text-muted-foreground mb-6">{winnerSubtext}</p>
+            
+            {showUnlockNotification && (
+              <div className="bg-gradient-to-r from-primary/20 to-accent/20 border-2 border-primary rounded-xl p-4 mb-6 animate-pulse">
+                <p className="text-xl font-bold text-primary">{unlockNotificationText}</p>
+              </div>
+            )}
+            
             <div className="flex justify-center gap-4 flex-wrap">
               <Button
                 onClick={() => {
                   setShowGameOver(false);
+                  setShowUnlockNotification(false);
                   startGame();
                 }}
                 className="bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold py-3 px-8 rounded-full text-xl"
@@ -2268,6 +2290,7 @@ export const Game = () => {
               <Button
                 onClick={() => {
                   setShowGameOver(false);
+                  setShowUnlockNotification(false);
                   setShowStartModal(true);
                   gameStateRef.current.isGameOver = true;
                 }}
