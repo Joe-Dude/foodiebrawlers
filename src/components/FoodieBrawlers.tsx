@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 
 type CharacterType = 'boba' | 'coffee' | 'juice' | 'soda' | 'smoothie' | 'milkshake' | 'pizza' | 'burger' | 'taco' | 'hotdog' | 'donut' | 'cupcake' | 'icecream' | 'ramen' | 'sushi' | 'cookie' | 'pretzel' | 'popcorn' | 'nachos' | 'fries' | 'waffle' | 'pancake' | 'croissant' | 'muffin' | 'bagel' | 'sandwich';
 type GameMode = 'solos' | 'teams';
+type TeamSize = 4 | 6;
 type Difficulty = 'easy' | 'medium' | 'hard';
 type MapType = 'classic' | 'pillars' | 'open' | 'maze' | 'corners' | 'cross' | 'diamond' | 'rings' | 'scattered' | 'boxes' | 'walls' | 'chambers' | 'grid' | 'plus' | 'circle' | 'zigzag' | 'lanes' | 'fortress' | 'temple' | 'arena' | 'colosseum' | 'dungeon' | 'castle' | 'garden';
 
@@ -232,15 +233,10 @@ class Player {
   update(keys: Record<string, boolean>, mousePos: {x: number, y: number}, 
          players: Player[], boomerangs: Boomerang[], obstacles: Obstacle[], 
          createParticle: (x: number, y: number, color: string, count?: number, decay?: number, speed?: number) => void) {
-    if (this.stunTimer > 0 && this.stunTimer <= 1000 / 60) {
-      this.deathTimer = 2000;
-      this.isEliminated = true;
-    }
-    
-    if (this.isEliminated && this.deathTimer > 0) {
-      this.deathTimer -= 1000/60;
-      // Drop boomerang when death timer expires
-      if (this.deathTimer <= 0 && this.boomerangCount > 0) {
+    // Drop boomerangs immediately when stunTimer reaches elimination threshold
+    if (this.stunTimer > 0 && this.stunTimer <= 1000 / 60 && !this.isEliminated) {
+      // Drop all boomerangs at current position before elimination
+      if (this.boomerangCount > 0) {
         for (let i = 0; i < this.boomerangCount; i++) {
           boomerangs.push(
             Object.assign(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, 0, 0, this), { isDropped: true })
@@ -248,6 +244,12 @@ class Player {
         }
         this.boomerangCount = 0;
       }
+      this.deathTimer = 2000;
+      this.isEliminated = true;
+    }
+    
+    if (this.isEliminated && this.deathTimer > 0) {
+      this.deathTimer -= 1000/60;
     }
     
     if (this.isEliminated) {
@@ -343,6 +345,73 @@ class Player {
     if (this.stunTimer > 0) {
       this.stunTimer -= 1000 / 60;
       return;
+    }
+
+    // Check for fallen teammates to revive (medium and hard bots only)
+    if ((this.difficulty === 'medium' || this.difficulty === 'hard')) {
+      const fallenTeammates = players.filter(p => 
+        p.team === this.team && 
+        p.isEliminated && 
+        p.deathTimer <= 0 && 
+        !p.isBot === false // only revive other bots or player
+      );
+      
+      if (fallenTeammates.length > 0) {
+        // Find closest fallen teammate
+        let closestFallen: Player | null = null;
+        let closestFallenDist = Infinity;
+        
+        fallenTeammates.forEach(fallen => {
+          const dist = Math.hypot(this.x - fallen.x, this.y - fallen.y);
+          if (dist < closestFallenDist) {
+            closestFallenDist = dist;
+            closestFallen = fallen;
+          }
+        });
+        
+        // If a fallen teammate is within reasonable range and no immediate threats
+        if (closestFallen && closestFallenDist < 300) {
+          const immediateEnemies = players.filter(p => 
+            p.team !== this.team && 
+            !p.isEliminated && 
+            Math.hypot(this.x - p.x, this.y - p.y) < 200
+          );
+          
+          // Prioritize revival if safe (hard bots) or mostly safe (medium bots)
+          const shouldRevive = this.difficulty === 'hard' 
+            ? immediateEnemies.length === 0
+            : immediateEnemies.length === 0 || Math.random() < 0.3;
+          
+          if (shouldRevive) {
+            // Move towards fallen teammate
+            const distX = closestFallen.x - this.x;
+            const distY = closestFallen.y - this.y;
+            const distance = Math.hypot(distX, distY);
+            
+            if (distance > 0 && !this.isHitting && !this.isDashing) {
+              const moveX = distX / distance;
+              const moveY = distY / distance;
+              const newX = this.x + moveX * this.speed;
+              const newY = this.y + moveY * this.speed;
+              
+              if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
+                this.x = newX;
+                this.y = newY;
+                this.lastMoveDir = { x: moveX, y: moveY };
+              }
+            }
+            
+            // Update aim direction towards fallen teammate
+            if (distance > 0) {
+              this.lastAimDir = { x: distX / distance, y: distY / distance };
+            }
+            
+            this.checkBoundaries();
+            this.checkObstacleCollision(obstacles);
+            return; // Skip normal combat behavior while reviving
+          }
+        }
+      }
     }
 
     let boomerangTarget: Boomerang | null = null;
@@ -1487,6 +1556,7 @@ export const Game = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterType>('boba');
   const [selectedMode, setSelectedMode] = useState<GameMode>('solos');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
+  const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize>(4);
   const [totalBrawlers, setTotalBrawlers] = useState(2);
   const [matchScores, setMatchScores] = useState<number[]>([]);
   const [winnerText, setWinnerText] = useState('You Win!');
@@ -1648,7 +1718,7 @@ export const Game = () => {
 
   useEffect(() => {
     if (!showCharacterSelect) return;
-    const numBots = selectedMode === 'solos' ? totalBrawlers - 1 : 3;
+    const numBots = selectedMode === 'solos' ? totalBrawlers - 1 : selectedTeamSize - 1;
     const availableChars = Array.from(unlockedCharacters);
     const usedChars = new Set<CharacterType>([selectedCharacter]);
     const selectedBotChars: CharacterType[] = [];
@@ -1701,7 +1771,7 @@ export const Game = () => {
 
     const interval = setInterval(animateCursors, 16);
     return () => clearInterval(interval);
-  }, [showCharacterSelect, unlockedCharacters, selectedCharacter, selectedMode, totalBrawlers]);
+  }, [showCharacterSelect, unlockedCharacters, selectedCharacter, selectedMode, selectedTeamSize, totalBrawlers]);
 
   const createParticle = (x: number, y: number, color: string, count = 20, decay = 0.95, speed = 4) => {
     gameStateRef.current.particles.push(new Particle(x, y, color, count, decay, speed));
@@ -1734,12 +1804,21 @@ export const Game = () => {
         info.push({ name: `Bot ${i+1}`, color: botColors[i], character: botType, isBot: true, team: 2 + i });
       }
     } else {
-      const botType1 = botSelectedCharacters[0] || CHARACTER_TYPES[0];
-      info.push({ name: 'Ally Bot', color: playerTeamColor, character: botType1, isBot: true, team: 1 });
-      const botType2 = botSelectedCharacters[1] || CHARACTER_TYPES[1];
-      info.push({ name: 'Enemy 1', color: botColors[0], character: botType2, isBot: true, team: 2 });
-      const botType3 = botSelectedCharacters[2] || CHARACTER_TYPES[2];
-      info.push({ name: 'Enemy 2', color: botColors[0], character: botType3, isBot: true, team: 2 });
+      // Teams mode - configurable team size
+      const playersPerTeam = selectedTeamSize / 2;
+      
+      // Add player's team
+      for (let i = 1; i < playersPerTeam; i++) {
+        const botType = botSelectedCharacters[i - 1] || CHARACTER_TYPES[0];
+        info.push({ name: `Ally Bot ${i}`, color: playerTeamColor, character: botType, isBot: true, team: 1 });
+      }
+      
+      // Add enemy team
+      for (let i = 0; i < playersPerTeam; i++) {
+        const botIndex = playersPerTeam - 1 + i;
+        const botType = botSelectedCharacters[botIndex] || CHARACTER_TYPES[i];
+        info.push({ name: `Enemy ${i + 1}`, color: botColors[0], character: botType, isBot: true, team: 2 });
+      }
     }
 
     gameStateRef.current.playerInfo = info;
@@ -2153,14 +2232,37 @@ export const Game = () => {
                 }`}
                 onClick={() => {
                   setSelectedMode('teams');
-                  setTotalBrawlers(4);
+                  setSelectedTeamSize(4);
                 }}
               >
                 <h3 className="text-3xl font-bold mb-3">Teams</h3>
-                <p className="text-muted-foreground text-lg">2 vs 2 teamwork!</p>
-                <p className="text-muted-foreground mt-2">Fight alongside an ally</p>
+                <p className="text-muted-foreground text-lg">2v2 or 3v3 teamwork!</p>
+                <p className="text-muted-foreground mt-2">Fight alongside allies</p>
               </button>
             </div>
+            {selectedMode === 'teams' && (
+              <div className="bg-muted/50 p-6 rounded-lg mb-6">
+                <h4 className="text-xl font-bold mb-3 text-muted-foreground">Team Size</h4>
+                <div className="flex justify-center gap-4">
+                  <button
+                    className={`border-2 px-8 py-4 rounded-full font-bold transition-all ${
+                      selectedTeamSize === 4 ? 'bg-primary text-primary-foreground border-primary scale-110' : 'border-border hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedTeamSize(4)}
+                  >
+                    2v2
+                  </button>
+                  <button
+                    className={`border-2 px-8 py-4 rounded-full font-bold transition-all ${
+                      selectedTeamSize === 6 ? 'bg-primary text-primary-foreground border-primary scale-110' : 'border-border hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedTeamSize(6)}
+                  >
+                    3v3
+                  </button>
+                </div>
+              </div>
+            )}
             {selectedMode === 'solos' && (
               <div className="bg-muted/50 p-6 rounded-lg mb-6">
                 <h4 className="text-xl font-bold mb-3 text-muted-foreground">Total Brawlers</h4>
