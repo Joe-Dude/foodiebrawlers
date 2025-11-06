@@ -819,6 +819,7 @@ class Player {
   }
   performHit() {
     const meleeCooldown = this.isBot ? this.difficulty === 'hard' ? 300 : MELEE_COOLDOWN : MELEE_COOLDOWN;
+    // Only allow melee attacks when holding a boomerang
     if (this.hitCooldown <= 0 && !this.isDashing && this.stunTimer <= 0 && this.boomerangCount > 0) {
       this.isHitting = true;
       this.hitTimer = MELEE_DURATION;
@@ -1420,18 +1421,41 @@ class Player {
       ctx.fillText(this.playerNumber.toString(), this.x + this.width / 2, this.y - 8);
       ctx.restore();
     }
-    if (this.isHitting && !preview) {
+    if (this.isHitting && !preview && this.boomerangCount > 0) {
       const centerX = this.x + this.width / 2;
       const centerY = this.y + this.height / 2;
       const angle = Math.atan2(this.lastAimDir.y, this.lastAimDir.x);
       const hitProgress = 1 - this.hitTimer / MELEE_DURATION;
+      
+      // Easing function for smoother animation
+      const easeOutQuad = (t: number) => t * (2 - t);
+      const easedProgress = easeOutQuad(hitProgress);
+      
       ctx.save();
-      ctx.globalAlpha = 0.8 * (1 - hitProgress);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, MELEE_RANGE * 0.8, angle - Math.PI / 3, angle + Math.PI / 3);
-      ctx.stroke();
+      
+      // Draw multiple swipe trails for better effect
+      for (let i = 0; i < 3; i++) {
+        const trailProgress = Math.max(0, easedProgress - i * 0.1);
+        const trailAlpha = 0.6 * (1 - trailProgress) * (1 - i * 0.3);
+        
+        if (trailAlpha > 0) {
+          ctx.globalAlpha = trailAlpha;
+          ctx.strokeStyle = "#e5e5e5";
+          ctx.lineWidth = 6 - i * 1.5;
+          ctx.lineCap = "round";
+          
+          // Swipe arc with rotation effect
+          const swipeAngle = easedProgress * Math.PI / 2;
+          const startAngle = angle - Math.PI / 3 - swipeAngle * 0.3;
+          const endAngle = angle + Math.PI / 3 + swipeAngle * 0.3;
+          const radius = MELEE_RANGE * (0.7 + easedProgress * 0.3);
+          
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+          ctx.stroke();
+        }
+      }
+      
       ctx.restore();
     }
     if (this.isBlocking && !preview) {
