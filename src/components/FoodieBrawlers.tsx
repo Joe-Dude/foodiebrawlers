@@ -298,7 +298,7 @@ class Player {
 
   performHit() {
     const meleeCooldown = this.isBot ? (this.difficulty === 'hard' ? 300 : MELEE_COOLDOWN) : MELEE_COOLDOWN;
-    if (this.hitCooldown <= 0 && !this.isDashing && this.stunTimer <= 0) {
+    if (this.hitCooldown <= 0 && !this.isDashing && this.stunTimer <= 0 && this.boomerangCount > 0) {
       this.isHitting = true;
       this.hitTimer = MELEE_DURATION;
       this.hitCooldown = meleeCooldown;
@@ -357,43 +357,61 @@ class Player {
       });
     }
 
-    // Find winning player for teaming behavior
+    // Find the greatest threat: prioritize enemies with boomerangs incoming or close enemies
     const alivePlayers = players.filter(p => !p.isEliminated);
-    let winningPlayer: Player | null = null;
-    if (alivePlayers.length > 2) {
-      const playerScores = new Map<number, number>();
-      alivePlayers.forEach(p => {
-        const score = playerScores.get(p.team) || 0;
-        playerScores.set(p.team, score + 1);
-      });
-      let maxScore = -1;
-      let winningTeam = -1;
-      playerScores.forEach((score, team) => {
-        if (score > maxScore) {
-          maxScore = score;
-          winningTeam = team;
-        }
-      });
-      if (winningTeam !== -1 && winningTeam !== this.team) {
-        winningPlayer = alivePlayers.find(p => p.team === winningTeam) || null;
-      }
-    }
-
     let enemyTarget: Player | null = null;
     let closestEnemyDist = Infinity;
+    let greatestThreat: Player | null = null;
+    let greatestThreatScore = -Infinity;
+
+    // Check for incoming boomerangs from enemies
+    const incomingBoomerangs = boomerangs.filter(b => 
+      !b.isDropped && b.owner.team !== this.team && b.isReturning === false
+    );
     
-    // Prioritize winning player if exists
-    if (winningPlayer) {
-      enemyTarget = winningPlayer;
-      closestEnemyDist = Math.hypot(this.x - winningPlayer.x, this.y - winningPlayer.y);
-    } else {
-      players.filter(p => p.team !== this.team && !p.isEliminated).forEach(opponent => {
-        const dist = Math.hypot(this.x - opponent.x, this.y - opponent.y);
-        if (dist < closestEnemyDist) {
-          closestEnemyDist = dist;
-          enemyTarget = opponent;
+    players.filter(p => p.team !== this.team && !p.isEliminated).forEach(opponent => {
+      const dist = Math.hypot(this.x - opponent.x, this.y - opponent.y);
+      
+      // Calculate threat score based on multiple factors
+      let threatScore = 0;
+      
+      // Closer enemies are more threatening
+      threatScore += (1000 - dist) / 10;
+      
+      // Enemies with boomerangs are more threatening
+      if (opponent.boomerangCount > 0) {
+        threatScore += 100;
+      }
+      
+      // Enemies actively throwing at us are most threatening
+      const boomerangsFromOpponent = incomingBoomerangs.filter(b => b.owner === opponent);
+      boomerangsFromOpponent.forEach(b => {
+        const boomDist = Math.hypot(b.x - (this.x + this.width/2), b.y - (this.y + this.height/2));
+        if (boomDist < 200) {
+          threatScore += 200 - boomDist;
         }
       });
+      
+      // Very close enemies are immediate threats
+      if (dist < 150) {
+        threatScore += 150;
+      }
+      
+      if (threatScore > greatestThreatScore) {
+        greatestThreatScore = threatScore;
+        greatestThreat = opponent;
+      }
+      
+      if (dist < closestEnemyDist) {
+        closestEnemyDist = dist;
+        enemyTarget = opponent;
+      }
+    });
+    
+    // Use greatest threat if found, otherwise use closest enemy
+    enemyTarget = greatestThreat || enemyTarget;
+    if (enemyTarget) {
+      closestEnemyDist = Math.hypot(this.x - enemyTarget.x, this.y - enemyTarget.y);
     }
     if (!enemyTarget) return;
 
@@ -538,14 +556,24 @@ class Player {
                                      this.lastAimDir.x, this.lastAimDir.y, this));
     }
 
-    // Hard bots block incoming boomerangs
+    // Hard bots block incoming boomerangs with prediction
     if (this.difficulty === 'hard' && this.boomerangCount > 0 && !this.isBlocking && this.blockCooldown <= 0) {
       const incomingBoomerangs = boomerangs.filter(b => 
         !b.isDropped && b.owner.team !== this.team && b.isReturning === false
       );
       for (const b of incomingBoomerangs) {
         const dist = Math.hypot(b.x - (this.x + this.width/2), b.y - (this.y + this.height/2));
-        if (dist < 150) {
+        
+        // Calculate if boomerang is heading towards us
+        const vecToUs = {
+          x: (this.x + this.width/2) - b.x,
+          y: (this.y + this.height/2) - b.y
+        };
+        const boomDir = {x: b.dx, y: b.dy};
+        const dotProduct = vecToUs.x * boomDir.x + vecToUs.y * boomDir.y;
+        
+        // Block if boomerang is close and heading towards us, or very close
+        if ((dist < 250 && dotProduct > 0.3) || dist < 120) {
           this.isBlocking = true;
           this.blockCooldown = 600;
           break;
@@ -1563,8 +1591,8 @@ export const Game = () => {
         boomerangs.push(new Boomerang(centerX, centerY, normDx, normDy, player));
       }
 
-      if (e.button === 2) {
-        if (player.boomerangCount > 0 && player.blockCooldown <= 0) {
+      if (e.button === 2 && player.boomerangCount > 0) {
+        if (player.blockCooldown <= 0) {
           player.isBlocking = true;
           player.blockCooldown = 600;
         } else {
