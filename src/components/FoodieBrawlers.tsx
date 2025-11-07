@@ -10,7 +10,7 @@ const BASE_HEIGHT = 720;
 const PLAYER_SIZE = 30;
 const PLAYER_SPEED = 4.5;
 const DASH_SPEED = 18;
-const DASH_DURATION = 60;
+const DASH_DURATION = 90;
 const DASH_COOLDOWN = 800;
 const BOOMERANG_SIZE = 25;
 const BOOMERANG_SPEED = 7;
@@ -1136,9 +1136,21 @@ class Player {
             }
           }
 
-          // If no path found, reset state timer to recalculate target
+          // If no path found, try moving away from obstacle or towards center
           if (!moved) {
             this.botStateTimer = 0;
+            // Emergency fallback: move towards map center
+            const toCenterX = (BASE_WIDTH / 2) - this.x;
+            const toCenterY = (BASE_HEIGHT / 2) - this.y;
+            const toCenterDist = Math.hypot(toCenterX, toCenterY);
+            if (toCenterDist > 0) {
+              const testX = this.x + (toCenterX / toCenterDist) * this.speed * 0.5;
+              const testY = this.y + (toCenterY / toCenterDist) * this.speed * 0.5;
+              if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
+                this.x = testX;
+                this.y = testY;
+              }
+            }
           }
         } else if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
           this.x = newX;
