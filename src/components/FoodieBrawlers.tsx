@@ -646,10 +646,10 @@ const SPAWN_POINTS = [{
   y: BASE_HEIGHT - 150
 }, {
   x: BASE_WIDTH / 2,
-  y: 150
+  y: 60
 }, {
   x: BASE_WIDTH / 2,
-  y: BASE_HEIGHT - 150
+  y: BASE_HEIGHT - 60
 }, {
   x: 150,
   y: BASE_HEIGHT / 2
