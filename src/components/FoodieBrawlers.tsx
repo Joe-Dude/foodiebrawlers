@@ -812,7 +812,7 @@ class Player {
     if (this.hitTimer <= 0) this.isHitting = false;
     if (this.blockCooldown <= 0) this.isBlocking = false;
     if (this.isBot) {
-      this.handleBotAI(players, boomerangs, obstacles);
+      this.handleBotAI(players, boomerangs, obstacles, createParticle);
     } else {
       this.handlePlayerInput(keys, mousePos, createParticle, obstacles);
     }
@@ -858,7 +858,7 @@ class Player {
       this.lastAimDir.y = aimY / mag;
     }
   }
-  handleBotAI(players: Player[], boomerangs: Boomerang[], obstacles: Obstacle[]) {
+  handleBotAI(players: Player[], boomerangs: Boomerang[], obstacles: Obstacle[], createParticle: (x: number, y: number, color: string, count?: number, decay?: number, speed?: number) => void) {
     if (this.stunTimer > 0) {
       this.stunTimer -= 1000 / 60;
       return;
@@ -1028,6 +1028,7 @@ class Player {
       if (this.dashTimer <= 0) {
         this.isDashing = false;
       }
+      createParticle(this.x + this.width / 2, this.y + this.height / 2, this.color, 10, 0.9, 2);
     }
     if (finalTarget === boomerangTarget) {
       if (distance > 0) {
@@ -1936,7 +1937,10 @@ class Boomerang {
       const dirY = this.owner.y + this.owner.height / 2 - this.y;
       const magnitude = Math.sqrt(dirX * dirX + dirY * dirY);
       if (magnitude < this.size) {
-        if (!this.owner.isEliminated && this.owner.boomerangCount < 2) this.owner.boomerangCount++;
+        if (!this.owner.isEliminated && this.owner.boomerangCount < 2 && !this.isPickedUp) {
+          this.owner.boomerangCount++;
+          this.isPickedUp = true;
+        }
         return false;
       }
       if (magnitude > 0) {
@@ -2531,12 +2535,14 @@ export const Game = () => {
     players.forEach(p => {
       if (p.boomerangCount < 2 && !p.isEliminated) {
         for (const b of boomerangs) {
-          if (b.isDropped) {
+          if (b.isDropped && !b.isPickedUp) {
             const distance = Math.hypot(p.x + p.width / 2 - b.x, p.y + p.height / 2 - b.y);
             if (distance < p.width / 2 + b.size / 2) {
-              p.boomerangCount++;
-              b.isPickedUp = true;
-              createParticle(b.x, b.y, '#FFFFFF', 15, 0.92, 3);
+              if (p.boomerangCount < 2) {
+                p.boomerangCount++;
+                b.isPickedUp = true;
+                createParticle(b.x, b.y, '#FFFFFF', 15, 0.92, 3);
+              }
               break;
             }
           }
