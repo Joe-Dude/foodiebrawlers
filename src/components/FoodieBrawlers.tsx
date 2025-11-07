@@ -2074,8 +2074,56 @@ function shuffleArray(array: any[]) {
     [array[i], array[j]] = [array[j], array[i]];
   }
 }
+// Load saved data from localStorage
+const loadFromStorage = () => {
+  try {
+    const saved = localStorage.getItem('foodieBrawlersData');
+    if (saved) {
+      const data = JSON.parse(saved);
+      return {
+        unlockedCharacters: new Set<CharacterType>(data.unlockedCharacters || ['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake']),
+        selectedCharacter: data.selectedCharacter as CharacterType || 'boba',
+        selectedMode: data.selectedMode as GameMode || 'solos',
+        selectedDifficulty: data.selectedDifficulty as Difficulty || 'medium',
+        selectedTeamSize: data.selectedTeamSize as TeamSize || 4,
+        totalBrawlers: data.totalBrawlers || 2,
+        totalRoundsPlayed: data.totalRoundsPlayed || 0
+      };
+    }
+  } catch (error) {
+    console.error('Error loading saved data:', error);
+  }
+  return null;
+};
+
+// Save data to localStorage
+const saveToStorage = (data: {
+  unlockedCharacters: Set<CharacterType>;
+  selectedCharacter: CharacterType;
+  selectedMode: GameMode;
+  selectedDifficulty: Difficulty;
+  selectedTeamSize: TeamSize;
+  totalBrawlers: number;
+  totalRoundsPlayed: number;
+}) => {
+  try {
+    localStorage.setItem('foodieBrawlersData', JSON.stringify({
+      unlockedCharacters: Array.from(data.unlockedCharacters),
+      selectedCharacter: data.selectedCharacter,
+      selectedMode: data.selectedMode,
+      selectedDifficulty: data.selectedDifficulty,
+      selectedTeamSize: data.selectedTeamSize,
+      totalBrawlers: data.totalBrawlers,
+      totalRoundsPlayed: data.totalRoundsPlayed
+    }));
+  } catch (error) {
+    console.error('Error saving data:', error);
+  }
+};
+
 export const Game = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const savedData = loadFromStorage();
   const [showStartModal, setShowStartModal] = useState(true);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
@@ -2085,11 +2133,11 @@ export const Game = () => {
   const [showNextRound, setShowNextRound] = useState(false);
   const [showUnlockNotification, setShowUnlockNotification] = useState(false);
   const [unlockNotificationText, setUnlockNotificationText] = useState('');
-  const [selectedCharacter, setSelectedCharacter] = useState<CharacterType>('boba');
-  const [selectedMode, setSelectedMode] = useState<GameMode>('solos');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
-  const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize>(4);
-  const [totalBrawlers, setTotalBrawlers] = useState(2);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterType>(savedData?.selectedCharacter || 'boba');
+  const [selectedMode, setSelectedMode] = useState<GameMode>(savedData?.selectedMode || 'solos');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(savedData?.selectedDifficulty || 'medium');
+  const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize>(savedData?.selectedTeamSize || 4);
+  const [totalBrawlers, setTotalBrawlers] = useState(savedData?.totalBrawlers || 2);
   const [matchScores, setMatchScores] = useState<number[]>([]);
   const [winnerText, setWinnerText] = useState('You Win!');
   const [winnerSubtext, setWinnerSubtext] = useState('');
@@ -2105,8 +2153,8 @@ export const Game = () => {
     selectTimer: number;
   }[]>([]);
   const [botSelectedCharacters, setBotSelectedCharacters] = useState<CharacterType[]>([]);
-  const [unlockedCharacters, setUnlockedCharacters] = useState<Set<CharacterType>>(new Set(['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake']));
-  const [totalRoundsPlayed, setTotalRoundsPlayed] = useState(0);
+  const [unlockedCharacters, setUnlockedCharacters] = useState<Set<CharacterType>>(() => savedData?.unlockedCharacters || new Set(['boba', 'coffee', 'juice', 'soda', 'smoothie', 'milkshake']));
+  const [totalRoundsPlayed, setTotalRoundsPlayed] = useState(savedData?.totalRoundsPlayed || 0);
   const gameStateRef = useRef({
     players: [] as Player[],
     boomerangs: [] as Boomerang[],
@@ -2124,6 +2172,20 @@ export const Game = () => {
     animationId: null as number | null,
     usedSpawnIndices: [] as number[]
   });
+  
+  // Auto-save game data to localStorage
+  useEffect(() => {
+    saveToStorage({
+      unlockedCharacters,
+      selectedCharacter,
+      selectedMode,
+      selectedDifficulty,
+      selectedTeamSize,
+      totalBrawlers,
+      totalRoundsPlayed
+    });
+  }, [unlockedCharacters, selectedCharacter, selectedMode, selectedDifficulty, selectedTeamSize, totalBrawlers, totalRoundsPlayed]);
+  
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
