@@ -877,17 +877,21 @@ class Player {
     }
     this.lastPosition = { x: this.x, y: this.y };
 
-    // If stuck for too long, take emergency action
-    if (this.stuckCounter > 30) {
+    // STRONG STUCK OVERRIDE - happens before ANY other logic including revive
+    if (this.stuckCounter > 20) {
       this.stuckCounter = 0;
       this.botStateTimer = 0;
-      // Force a random direction
+      this.revivalTimer = 0; // Force cancel revival
+      this.reviver = null;
+      
+      // Force a random direction away from current position
       const randomAngle = Math.random() * Math.PI * 2;
       this.botMoveTarget = {
         x: Math.cos(randomAngle),
         y: Math.sin(randomAngle)
       };
-      // Dash to break free if available
+      
+      // Force dash to break free
       if (!this.isDashing && this.dashCooldown <= 0) {
         this.isDashing = true;
         this.dashTimer = DASH_DURATION;
@@ -895,6 +899,17 @@ class Player {
         this.dx = this.botMoveTarget.x;
         this.dy = this.botMoveTarget.y;
       }
+      
+      // Actually move in the random direction
+      const newX = this.x + this.botMoveTarget.x * this.speed * 3;
+      const newY = this.y + this.botMoveTarget.y * this.speed * 3;
+      if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
+        this.x = newX;
+        this.y = newY;
+      }
+      
+      this.checkBoundaries();
+      return; // Skip all other AI logic this frame
     }
 
     // Check for fallen teammates to revive (medium and hard bots only)
@@ -1229,9 +1244,26 @@ class Player {
     let throwChance = this.difficulty === 'easy' ? 0.2 : this.difficulty === 'medium' ? 0.012 : 0.018;
     const throwDistMin = this.difficulty === 'easy' ? 80 : this.difficulty === 'medium' ? 100 : 120;
     const throwDistMax = this.difficulty === 'easy' ? 500 : this.difficulty === 'medium' ? 450 : 400;
-    if (this.boomerangCount > 0 && closestEnemyDist < throwDistMax && closestEnemyDist > throwDistMin && Math.random() < throwChance) {
+    
+    // Check if we have clear line of sight to enemy before throwing
+    const hasLineOfSight = enemyTarget ? this.hasLineOfSight(enemyTarget.x + enemyTarget.width / 2, enemyTarget.y + enemyTarget.height / 2, obstacles) : false;
+    
+    // Only throw if we have line of sight AND meet distance/chance requirements
+    if (this.boomerangCount > 0 && closestEnemyDist < throwDistMax && closestEnemyDist > throwDistMin && hasLineOfSight && Math.random() < throwChance) {
       this.boomerangCount--;
       boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, this.lastAimDir.x, this.lastAimDir.y, this));
+    }
+    
+    // If no line of sight but enemy is close, prefer to move towards them (rush around obstacle)
+    if (!hasLineOfSight && enemyTarget && closestEnemyDist < 350 && this.boomerangCount > 0) {
+      // Override bot target to rush towards enemy directly
+      if (distance > 0) {
+        this.botMoveTarget = {
+          x: distX / distance,
+          y: distY / distance
+        };
+        this.botStateTimer = 200; // Short timer to keep rushing
+      }
     }
 
     // Hard bots block incoming boomerangs with prediction
@@ -1269,6 +1301,32 @@ class Player {
       }
     }
     return false;
+  }
+  
+  // Check if there's a clear line of sight to target (no obstacles blocking)
+  hasLineOfSight(targetX: number, targetY: number, obstacles: Obstacle[]): boolean {
+    const startX = this.x + this.width / 2;
+    const startY = this.y + this.height / 2;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const distance = Math.hypot(dx, dy);
+    
+    // Check multiple points along the line
+    const steps = Math.ceil(distance / 10); // Check every 10 pixels
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const checkX = startX + dx * t;
+      const checkY = startY + dy * t;
+      
+      // Check if this point is inside any obstacle
+      for (const obstacle of obstacles) {
+        if (checkX >= obstacle.x && checkX <= obstacle.x + obstacle.width &&
+            checkY >= obstacle.y && checkY <= obstacle.y + obstacle.height) {
+          return false; // Line of sight blocked
+        }
+      }
+    }
+    return true; // Clear line of sight
   }
   handleMovement(keys: Record<string, boolean>) {
     let moveX = 0;
