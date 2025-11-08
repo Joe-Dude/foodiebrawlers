@@ -708,6 +708,8 @@ class Player {
   blockCooldown: number;
   revivalTimer: number;
   reviver: Player | null;
+  stuckCounter: number;
+  lastPosition: { x: number; y: number };
   constructor(x: number, y: number, color: string, controls: any, name: string, characterType: CharacterType, team: number, playerNumber: number, isBot = false, difficulty: Difficulty = 'medium') {
     this.x = x;
     this.y = y;
@@ -752,6 +754,8 @@ class Player {
     this.blockCooldown = 0;
     this.revivalTimer = 0;
     this.reviver = null;
+    this.stuckCounter = 0;
+    this.lastPosition = { x, y };
   }
   update(keys: Record<string, boolean>, mousePos: {
     x: number;
@@ -862,6 +866,35 @@ class Player {
     if (this.stunTimer > 0) {
       this.stunTimer -= 1000 / 60;
       return;
+    }
+
+    // Detect if bot is stuck (hasn't moved significantly in the last frame)
+    const distMoved = Math.hypot(this.x - this.lastPosition.x, this.y - this.lastPosition.y);
+    if (distMoved < 0.5) {
+      this.stuckCounter++;
+    } else {
+      this.stuckCounter = Math.max(0, this.stuckCounter - 1);
+    }
+    this.lastPosition = { x: this.x, y: this.y };
+
+    // If stuck for too long, take emergency action
+    if (this.stuckCounter > 30) {
+      this.stuckCounter = 0;
+      this.botStateTimer = 0;
+      // Force a random direction
+      const randomAngle = Math.random() * Math.PI * 2;
+      this.botMoveTarget = {
+        x: Math.cos(randomAngle),
+        y: Math.sin(randomAngle)
+      };
+      // Dash to break free if available
+      if (!this.isDashing && this.dashCooldown <= 0) {
+        this.isDashing = true;
+        this.dashTimer = DASH_DURATION;
+        this.dashCooldown = DASH_COOLDOWN;
+        this.dx = this.botMoveTarget.x;
+        this.dy = this.botMoveTarget.y;
+      }
     }
 
     // Check for fallen teammates to revive (medium and hard bots only)
@@ -1137,19 +1170,45 @@ class Player {
             }
           }
 
-          // If no path found, try moving away from obstacle or towards center
+          // If no path found, try multiple fallback strategies
           if (!moved) {
+            this.stuckCounter += 2; // Increase stuck counter faster when completely blocked
             this.botStateTimer = 0;
-            // Emergency fallback: move towards map center
-            const toCenterX = (BASE_WIDTH / 2) - this.x;
-            const toCenterY = (BASE_HEIGHT / 2) - this.y;
-            const toCenterDist = Math.hypot(toCenterX, toCenterY);
-            if (toCenterDist > 0) {
-              const testX = this.x + (toCenterX / toCenterDist) * this.speed * 0.5;
-              const testY = this.y + (toCenterY / toCenterDist) * this.speed * 0.5;
-              if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
-                this.x = testX;
-                this.y = testY;
+            
+            // Try random directions
+            const randomAttempts = [
+              { x: Math.random() - 0.5, y: Math.random() - 0.5 },
+              { x: Math.random() - 0.5, y: Math.random() - 0.5 },
+              { x: Math.random() - 0.5, y: Math.random() - 0.5 }
+            ];
+            
+            for (const attempt of randomAttempts) {
+              const attemptMag = Math.hypot(attempt.x, attempt.y);
+              if (attemptMag > 0) {
+                const testX = this.x + (attempt.x / attemptMag) * this.speed;
+                const testY = this.y + (attempt.y / attemptMag) * this.speed;
+                if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
+                  this.x = testX;
+                  this.y = testY;
+                  this.lastMoveDir = { x: attempt.x / attemptMag, y: attempt.y / attemptMag };
+                  moved = true;
+                  break;
+                }
+              }
+            }
+            
+            // Last resort: move towards map center
+            if (!moved) {
+              const toCenterX = (BASE_WIDTH / 2) - this.x;
+              const toCenterY = (BASE_HEIGHT / 2) - this.y;
+              const toCenterDist = Math.hypot(toCenterX, toCenterY);
+              if (toCenterDist > 0) {
+                const testX = this.x + (toCenterX / toCenterDist) * this.speed;
+                const testY = this.y + (toCenterY / toCenterDist) * this.speed;
+                if (!this.isCollidingWithObstacle(testX, testY, obstacles)) {
+                  this.x = testX;
+                  this.y = testY;
+                }
               }
             }
           }
