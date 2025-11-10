@@ -2588,10 +2588,10 @@ export const Game = () => {
     }
     
     if (incrementQueue.length === 0) {
-      // No one scored, show button immediately after 0.5s
+      // No one scored, show button after 1.5s total (1s initial + 0.5s)
       const timeout = setTimeout(() => {
         setShowNextRoundButton(true);
-      }, 500);
+      }, 1500);
       return () => clearTimeout(timeout);
     }
     
@@ -2623,8 +2623,8 @@ export const Game = () => {
       timeouts.push(timeout);
     };
     
-    // Wait 0.5s before starting first increment
-    const initialTimeout = setTimeout(incrementNext, 500);
+    // Wait 1s after round ends, then 0.5s before starting first increment (1.5s total)
+    const initialTimeout = setTimeout(incrementNext, 1500);
     timeouts.push(initialTimeout);
     
     return () => {
