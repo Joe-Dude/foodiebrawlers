@@ -2113,6 +2113,7 @@ class Boomerang {
   isReturning: boolean;
   isDropped: boolean;
   isPickedUp: boolean;
+  bounceCount: number;
   constructor(x: number, y: number, dx: number, dy: number, owner: Player) {
     this.x = x;
     this.y = y;
@@ -2125,6 +2126,7 @@ class Boomerang {
     this.isReturning = false;
     this.isDropped = false;
     this.isPickedUp = false;
+    this.bounceCount = 0;
   }
   update(obstacles: Obstacle[]) {
     if (this.isDropped) return true;
@@ -2152,45 +2154,98 @@ class Boomerang {
     this.x += this.dx * BOOMERANG_SPEED;
     this.y += this.dy * BOOMERANG_SPEED;
     this.rotation += 0.3;
+    
+    // Handle wall bounces
     if (this.x - this.size / 2 < 0) {
       this.x = this.size / 2;
       this.dx *= -1;
-      this.isReturning = true;
+      this.bounceCount++;
+      this.checkLineOfSightAfterBounce(obstacles);
     }
     if (this.x + this.size / 2 > BASE_WIDTH) {
       this.x = BASE_WIDTH - this.size / 2;
       this.dx *= -1;
-      this.isReturning = true;
+      this.bounceCount++;
+      this.checkLineOfSightAfterBounce(obstacles);
     }
     if (this.y - this.size / 2 < 0) {
       this.y = this.size / 2;
       this.dy *= -1;
-      this.isReturning = true;
+      this.bounceCount++;
+      this.checkLineOfSightAfterBounce(obstacles);
     }
     if (this.y + this.size / 2 > BASE_HEIGHT) {
       this.y = BASE_HEIGHT - this.size / 2;
       this.dy *= -1;
-      this.isReturning = true;
+      this.bounceCount++;
+      this.checkLineOfSightAfterBounce(obstacles);
     }
+    
+    // Handle obstacle bounces
     obstacles.forEach(obstacle => {
       if (this.x + this.size / 2 > obstacle.x && this.x - this.size / 2 < obstacle.x + obstacle.width && this.y + this.size / 2 > obstacle.y && this.y - this.size / 2 < obstacle.y + obstacle.height) {
-        if (this.isReturning) {
-          this.isDropped = true;
-        } else {
-          const prevX = this.x - this.dx * BOOMERANG_SPEED;
-          const prevY = this.y - this.dy * BOOMERANG_SPEED;
-          if (prevX + this.size / 2 <= obstacle.x || prevX - this.size / 2 >= obstacle.x + obstacle.width) {
-            this.dx *= -1;
-          }
-          if (prevY + this.size / 2 <= obstacle.y || prevY - this.size / 2 >= obstacle.y + obstacle.height) {
-            this.dy *= -1;
-          }
-          this.isReturning = true;
+        const prevX = this.x - this.dx * BOOMERANG_SPEED;
+        const prevY = this.y - this.dy * BOOMERANG_SPEED;
+        if (prevX + this.size / 2 <= obstacle.x || prevX - this.size / 2 >= obstacle.x + obstacle.width) {
+          this.dx *= -1;
         }
+        if (prevY + this.size / 2 <= obstacle.y || prevY - this.size / 2 >= obstacle.y + obstacle.height) {
+          this.dy *= -1;
+        }
+        this.bounceCount++;
+        this.checkLineOfSightAfterBounce(obstacles);
       }
     });
     return true;
   }
+  
+  // Check line of sight to owner after bouncing
+  checkLineOfSightAfterBounce(obstacles: Obstacle[]) {
+    // Must bounce at least once before checking
+    if (this.bounceCount < 1) return;
+    
+    const ownerCenterX = this.owner.x + this.owner.width / 2;
+    const ownerCenterY = this.owner.y + this.owner.height / 2;
+    
+    // Check if owner is in line of sight
+    const hasLOS = this.hasLineOfSightToOwner(ownerCenterX, ownerCenterY, obstacles);
+    
+    if (hasLOS) {
+      // Owner is visible - return to them and reset bounce count
+      this.isReturning = true;
+      this.bounceCount = 0;
+    } else {
+      // Owner is not visible - drop the boomerang
+      this.isDropped = true;
+    }
+  }
+  
+  // Check if there's a clear line of sight from boomerang to owner
+  hasLineOfSightToOwner(targetX: number, targetY: number, obstacles: Obstacle[]): boolean {
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const distance = Math.hypot(dx, dy);
+    
+    if (distance === 0) return true;
+    
+    // Check multiple points along the line
+    const steps = Math.ceil(distance / 10); // Check every 10 pixels
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const checkX = this.x + dx * t;
+      const checkY = this.y + dy * t;
+      
+      // Check if this point is inside any obstacle
+      for (const obstacle of obstacles) {
+        if (checkX >= obstacle.x && checkX <= obstacle.x + obstacle.width &&
+            checkY >= obstacle.y && checkY <= obstacle.y + obstacle.height) {
+          return false; // Line of sight blocked
+        }
+      }
+    }
+    return true; // Clear line of sight
+  }
+  
   draw(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(this.x, this.y);
