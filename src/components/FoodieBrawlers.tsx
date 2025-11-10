@@ -2424,6 +2424,7 @@ export const Game = () => {
   }[]>([]);
   const [animatedScores, setAnimatedScores] = useState<number[]>([]);
   const [showNextRoundButton, setShowNextRoundButton] = useState(false);
+  const targetScoresRef = useRef<number[]>([]);
   const [botCursors, setBotCursors] = useState<{
     x: number;
     y: number;
@@ -2565,10 +2566,15 @@ export const Game = () => {
   
   // Animate scores counting up sequentially - go through players top to bottom, adding points one at a time
   useEffect(() => {
-    if (!showNextRound || animatedScores.length === 0 || matchScores.length === 0) return;
+    if (!showNextRound) return;
     
     const oldScores = [...animatedScores];
-    const targetScores = [...matchScores];
+    const targetScores = targetScoresRef.current;
+    
+    if (oldScores.length === 0 || targetScores.length === 0) {
+      setShowNextRoundButton(true);
+      return;
+    }
     
     // Build a queue of increments in player order (top to bottom)
     const incrementQueue: { playerIndex: number }[] = [];
@@ -2583,20 +2589,22 @@ export const Game = () => {
     
     if (incrementQueue.length === 0) {
       // No one scored, show button immediately after 0.5s
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         setShowNextRoundButton(true);
       }, 500);
-      return;
+      return () => clearTimeout(timeout);
     }
     
     let currentIndex = 0;
+    const timeouts: NodeJS.Timeout[] = [];
     
     const incrementNext = () => {
       if (currentIndex >= incrementQueue.length) {
         // All increments done, wait 0.5s then show button
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           setShowNextRoundButton(true);
         }, 500);
+        timeouts.push(timeout);
         return;
       }
       
@@ -2611,12 +2619,18 @@ export const Game = () => {
       currentIndex++;
       
       // Wait 0.5s before next increment
-      setTimeout(incrementNext, 500);
+      const timeout = setTimeout(incrementNext, 500);
+      timeouts.push(timeout);
     };
     
     // Wait 0.5s before starting first increment
-    setTimeout(incrementNext, 500);
-  }, [showNextRound, matchScores, animatedScores]);
+    const initialTimeout = setTimeout(incrementNext, 500);
+    timeouts.push(initialTimeout);
+    
+    return () => {
+      timeouts.forEach(t => clearTimeout(t));
+    };
+  }, [showNextRound]);
   
   const drawCharacterPreviews = () => {
     setTimeout(() => {
@@ -2929,6 +2943,9 @@ export const Game = () => {
     // Capture current scores before updating
     const oldScores = [...matchScores];
     const newScores = [...gameStateRef.current.matchScores];
+    
+    // Store target scores in ref for animation
+    targetScoresRef.current = newScores;
     
     // Set animated scores to OLD scores, match scores to NEW scores
     setAnimatedScores(oldScores);
