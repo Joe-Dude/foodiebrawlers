@@ -710,6 +710,8 @@ class Player {
   reviver: Player | null;
   stuckCounter: number;
   lastPosition: { x: number; y: number };
+  kills: number;
+  lastAttacker: Player | null;
   constructor(x: number, y: number, color: string, controls: any, name: string, characterType: CharacterType, team: number, playerNumber: number, isBot = false, difficulty: Difficulty = 'medium') {
     this.x = x;
     this.y = y;
@@ -756,6 +758,8 @@ class Player {
     this.reviver = null;
     this.stuckCounter = 0;
     this.lastPosition = { x, y };
+    this.kills = 0;
+    this.lastAttacker = null;
   }
   update(keys: Record<string, boolean>, mousePos: {
     x: number;
@@ -774,6 +778,10 @@ class Player {
       }
       this.deathTimer = 2000;
       this.isEliminated = true;
+      // Award kill to last attacker
+      if (this.lastAttacker && !this.lastAttacker.isEliminated) {
+        this.lastAttacker.kills++;
+      }
     }
     if (this.isEliminated && this.deathTimer > 0) {
       this.deathTimer -= 1000 / 60;
@@ -797,6 +805,7 @@ class Player {
               this.revivalTimer = 0;
               this.reviver = null;
               this.boomerangCount = 1;
+              this.lastAttacker = null; // Clear attacker on revival
               createParticle(this.x + this.width / 2, this.y + this.height / 2, this.color, 50, 0.95, 6);
             }
             break;
@@ -2413,6 +2422,7 @@ export const Game = () => {
     score: number;
     color: string;
   }[]>([]);
+  const [animatedScores, setAnimatedScores] = useState<number[]>([]);
   const [botCursors, setBotCursors] = useState<{
     x: number;
     y: number;
@@ -2551,6 +2561,35 @@ export const Game = () => {
       }
     };
   }, []);
+  
+  // Animate scores counting up
+  useEffect(() => {
+    if (!showNextRound || animatedScores.length === 0) return;
+    
+    const targetScores = matchScores;
+    let frameCount = 0;
+    const totalFrames = 60; // Count up over 1 second (60 frames at 60fps)
+    
+    const animate = () => {
+      frameCount++;
+      const progress = Math.min(frameCount / totalFrames, 1);
+      
+      const newAnimatedScores = animatedScores.map((startScore, index) => {
+        const targetScore = targetScores[index] || 0;
+        const diff = targetScore - startScore;
+        return Math.floor(startScore + diff * progress);
+      });
+      
+      setAnimatedScores(newAnimatedScores);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }, [showNextRound, matchScores]);
+  
   const drawCharacterPreviews = () => {
     setTimeout(() => {
       CHARACTER_TYPES.forEach(charType => {
@@ -2749,6 +2788,7 @@ export const Game = () => {
             createParticle(b.x, b.y, p.color, 30, 0.93, 4);
           } else {
             p.stunTimer = 1000;
+            p.lastAttacker = b.owner; // Track who hit this player
             createParticle(p.x + p.width / 2, p.y + p.height / 2, '#FBBF24', 50, 0.96, 5);
           }
         }
@@ -2770,6 +2810,7 @@ export const Game = () => {
           if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
           if (angleDiff < Math.PI / 2) {
             target.stunTimer = 500;
+            target.lastAttacker = attacker; // Track who hit this player
             createParticle(targetCenterX, targetCenterY, '#FFFFFF', 30, 0.9, 3);
           }
         }
@@ -2812,9 +2853,10 @@ export const Game = () => {
         if (selectedMode === 'teams') {
           gameStateRef.current.matchScores[winningTeam - 1]++;
         } else {
-          const winner = alivePlayers[0];
-          const winnerIndex = gameStateRef.current.playerInfo.findIndex(p => p.team === winner.team);
-          if (winnerIndex !== -1) gameStateRef.current.matchScores[winnerIndex]++;
+          // In solo mode, award points based on kills for each player
+          gameStateRef.current.players.forEach((player, index) => {
+            gameStateRef.current.matchScores[index] += player.kills;
+          });
         }
       }
 
@@ -2856,6 +2898,9 @@ export const Game = () => {
     }
     setScoreInfo(info);
     setMatchScores([...gameStateRef.current.matchScores]);
+    
+    // Initialize animated scores from previous match scores
+    setAnimatedScores([...matchScores]);
     setShowNextRound(true);
   };
   const endGame = () => {
@@ -2996,8 +3041,9 @@ export const Game = () => {
               <div className="bg-muted/50 p-6 rounded-lg border border-border">
                 <h3 className="font-bold text-2xl text-primary mb-3">Game Rules</h3>
                 <ul className="list-disc list-inside space-y-2 text-foreground">
-                  <li>Be the last brawler standing to win a round</li>
-                  <li>First player to {WIN_SCORE} rounds wins the match</li>
+                  <li>In solo mode, earn points for each opponent you eliminate</li>
+                  <li>In team mode, be the last team standing to win a round</li>
+                  <li>First player to {WIN_SCORE} points wins the match</li>
                   <li>Throw boomerangs to stun opponents from distance</li>
                   <li>Block incoming boomerangs with right-click (requires boomerang)</li>
                   <li>Use melee attacks when close to enemies (or when no boomerang)</li>
@@ -3191,7 +3237,7 @@ export const Game = () => {
                   <span className="font-bold" style={{
               color: info.color
             }}>{info.name}</span>
-                  <span className="font-bold text-2xl">{info.score}</span>
+                  <span className="font-bold text-2xl">{animatedScores[i] !== undefined ? animatedScores[i] : info.score}</span>
                 </div>)}
             </div>
             <Button onClick={() => {
