@@ -2563,69 +2563,57 @@ export const Game = () => {
     };
   }, []);
   
-  // Animate scores counting up sequentially
+  // Animate scores counting up sequentially - increment by 1 every 0.5 seconds
   useEffect(() => {
     if (!showNextRound || animatedScores.length === 0) return;
     
     const oldScores = [...animatedScores];
     const targetScores = [...matchScores];
-    const scoringPlayers: number[] = [];
     
-    // Find which players scored
+    // Build a queue of all increments that need to happen
+    const incrementQueue: { playerIndex: number }[] = [];
     targetScores.forEach((score, index) => {
-      if (score > oldScores[index]) {
-        scoringPlayers.push(index);
+      const pointsToAdd = score - oldScores[index];
+      for (let i = 0; i < pointsToAdd; i++) {
+        incrementQueue.push({ playerIndex: index });
       }
     });
     
-    if (scoringPlayers.length === 0) {
-      // No one scored, show button immediately
-      setShowNextRoundButton(true);
+    if (incrementQueue.length === 0) {
+      // No one scored, show button immediately after 0.5s
+      setTimeout(() => {
+        setShowNextRoundButton(true);
+      }, 500);
       return;
     }
     
-    let currentPlayerIndex = 0;
+    let currentIndex = 0;
     
-    const animateNextPlayer = () => {
-      if (currentPlayerIndex >= scoringPlayers.length) {
-        // All players animated, wait 0.5s then show button
+    const incrementNext = () => {
+      if (currentIndex >= incrementQueue.length) {
+        // All increments done, wait 0.5s then show button
         setTimeout(() => {
           setShowNextRoundButton(true);
         }, 500);
         return;
       }
       
-      const playerIndex = scoringPlayers[currentPlayerIndex];
-      const startScore = oldScores[playerIndex];
-      const targetScore = targetScores[playerIndex];
-      let frameCount = 0;
-      const totalFrames = 30; // Count up over 0.5 seconds
+      const { playerIndex } = incrementQueue[currentIndex];
       
-      const animate = () => {
-        frameCount++;
-        const progress = Math.min(frameCount / totalFrames, 1);
-        const currentScore = Math.floor(startScore + (targetScore - startScore) * progress);
-        
-        setAnimatedScores(prev => {
-          const newScores = [...prev];
-          newScores[playerIndex] = currentScore;
-          return newScores;
-        });
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          // Wait 0.5s before animating next player
-          currentPlayerIndex++;
-          setTimeout(animateNextPlayer, 500);
-        }
-      };
+      setAnimatedScores(prev => {
+        const newScores = [...prev];
+        newScores[playerIndex] = (newScores[playerIndex] || 0) + 1;
+        return newScores;
+      });
       
-      requestAnimationFrame(animate);
+      currentIndex++;
+      
+      // Wait 0.5s before next increment
+      setTimeout(incrementNext, 500);
     };
     
-    // Wait 0.5s before starting first animation
-    setTimeout(animateNextPlayer, 500);
+    // Wait 0.5s before starting first increment
+    setTimeout(incrementNext, 500);
   }, [showNextRound]);
   
   const drawCharacterPreviews = () => {
