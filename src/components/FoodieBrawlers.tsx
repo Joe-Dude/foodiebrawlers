@@ -878,11 +878,19 @@ class Player {
     this.lastPosition = { x: this.x, y: this.y };
 
     // STRONG STUCK OVERRIDE - happens before ANY other logic including revive
-    if (this.stuckCounter > 20) {
+    // Use different thresholds: 2 seconds (120 frames) if reviving, 0.33 seconds (20 frames) otherwise
+    const isReviving = this.revivalTimer > 0 || this.reviver !== null;
+    const stuckThreshold = isReviving ? 120 : 20;
+    
+    if (this.stuckCounter > stuckThreshold) {
       this.stuckCounter = 0;
       this.botStateTimer = 0;
-      this.revivalTimer = 0; // Force cancel revival
-      this.reviver = null;
+      
+      // Only cancel revival if we're past the healing threshold
+      if (isReviving && this.stuckCounter > 120) {
+        this.revivalTimer = 0;
+        this.reviver = null;
+      }
       
       // Force a random direction away from current position
       const randomAngle = Math.random() * Math.PI * 2;
@@ -900,9 +908,10 @@ class Player {
         this.dy = this.botMoveTarget.y;
       }
       
-      // Actually move in the random direction
-      const newX = this.x + this.botMoveTarget.x * this.speed * 3;
-      const newY = this.y + this.botMoveTarget.y * this.speed * 3;
+      // Smoothly walk in the random direction instead of teleporting
+      const walkSpeed = this.speed * 1.5;
+      const newX = this.x + this.botMoveTarget.x * walkSpeed;
+      const newY = this.y + this.botMoveTarget.y * walkSpeed;
       if (!this.isCollidingWithObstacle(newX, newY, obstacles)) {
         this.x = newX;
         this.y = newY;
