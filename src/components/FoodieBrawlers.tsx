@@ -1263,16 +1263,23 @@ class Player {
       boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, this.lastAimDir.x, this.lastAimDir.y, this));
     }
     
-    // If no line of sight but enemy is close, prefer to move towards them (rush around obstacle)
-    if (!hasLineOfSight && enemyTarget && closestEnemyDist < 350 && this.boomerangCount > 0) {
-      // Override bot target to rush towards enemy directly
-      if (distance > 0) {
-        this.botMoveTarget = {
-          x: distX / distance,
-          y: distY / distance
-        };
-        this.botStateTimer = 200; // Short timer to keep rushing
-      }
+    // If no line of sight, find an alternative target position to navigate around obstacles
+    if (!hasLineOfSight && enemyTarget && closestEnemyDist < 400) {
+      // Instead of rushing directly at enemy, try to navigate to a position with line of sight
+      // Try moving perpendicular to the direct path to find a way around
+      const perpX = -distY / distance; // Perpendicular direction
+      const perpY = distX / distance;
+      
+      // Alternate between trying to go left and right around obstacle
+      const sideMultiplier = Math.floor(Date.now() / 1000) % 2 === 0 ? 1 : -1;
+      const searchX = (distX / distance * 0.6) + (perpX * 0.4 * sideMultiplier);
+      const searchY = (distY / distance * 0.6) + (perpY * 0.4 * sideMultiplier);
+      
+      this.botMoveTarget = {
+        x: searchX,
+        y: searchY
+      };
+      this.botStateTimer = 100; // Short timer to keep trying this path
     }
 
     // Hard bots block incoming boomerangs with prediction
