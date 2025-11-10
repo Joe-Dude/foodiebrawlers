@@ -2565,7 +2565,7 @@ export const Game = () => {
   
   // Animate scores counting up sequentially - go through players top to bottom, adding points one at a time
   useEffect(() => {
-    if (!showNextRound || animatedScores.length === 0) return;
+    if (!showNextRound || animatedScores.length === 0 || matchScores.length === 0) return;
     
     const oldScores = [...animatedScores];
     const targetScores = [...matchScores];
@@ -2616,7 +2616,7 @@ export const Game = () => {
     
     // Wait 0.5s before starting first increment
     setTimeout(incrementNext, 500);
-  }, [showNextRound]);
+  }, [showNextRound, matchScores, animatedScores]);
   
   const drawCharacterPreviews = () => {
     setTimeout(() => {
@@ -2926,10 +2926,13 @@ export const Game = () => {
     }
     setScoreInfo(info);
     
-    // Set animated scores to current scores (before this round's points)
-    setAnimatedScores([...matchScores]);
-    // Update match scores to new scores (with this round's points)
-    setMatchScores([...gameStateRef.current.matchScores]);
+    // Capture current scores before updating
+    const oldScores = [...matchScores];
+    const newScores = [...gameStateRef.current.matchScores];
+    
+    // Set animated scores to OLD scores, match scores to NEW scores
+    setAnimatedScores(oldScores);
+    setMatchScores(newScores);
     setShowNextRoundButton(false);
     setShowNextRound(true);
   };
