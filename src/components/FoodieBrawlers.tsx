@@ -2563,21 +2563,23 @@ export const Game = () => {
     };
   }, []);
   
-  // Animate scores counting up sequentially - increment by 1 every 0.5 seconds
+  // Animate scores counting up sequentially - go through players top to bottom, adding points one at a time
   useEffect(() => {
     if (!showNextRound || animatedScores.length === 0) return;
     
     const oldScores = [...animatedScores];
     const targetScores = [...matchScores];
     
-    // Build a queue of all increments that need to happen
+    // Build a queue of increments in player order (top to bottom)
     const incrementQueue: { playerIndex: number }[] = [];
-    targetScores.forEach((score, index) => {
-      const pointsToAdd = score - oldScores[index];
+    
+    // Go through each player in order and add all their points to the queue
+    for (let playerIndex = 0; playerIndex < targetScores.length; playerIndex++) {
+      const pointsToAdd = targetScores[playerIndex] - oldScores[playerIndex];
       for (let i = 0; i < pointsToAdd; i++) {
-        incrementQueue.push({ playerIndex: index });
+        incrementQueue.push({ playerIndex });
       }
-    });
+    }
     
     if (incrementQueue.length === 0) {
       // No one scored, show button immediately after 0.5s
