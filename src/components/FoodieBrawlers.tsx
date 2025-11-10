@@ -2423,6 +2423,7 @@ export const Game = () => {
     color: string;
   }[]>([]);
   const [animatedScores, setAnimatedScores] = useState<number[]>([]);
+  const [showNextRoundButton, setShowNextRoundButton] = useState(false);
   const [botCursors, setBotCursors] = useState<{
     x: number;
     y: number;
@@ -2562,33 +2563,70 @@ export const Game = () => {
     };
   }, []);
   
-  // Animate scores counting up
+  // Animate scores counting up sequentially
   useEffect(() => {
     if (!showNextRound || animatedScores.length === 0) return;
     
-    const targetScores = matchScores;
-    let frameCount = 0;
-    const totalFrames = 60; // Count up over 1 second (60 frames at 60fps)
+    const oldScores = [...animatedScores];
+    const targetScores = [...matchScores];
+    const scoringPlayers: number[] = [];
     
-    const animate = () => {
-      frameCount++;
-      const progress = Math.min(frameCount / totalFrames, 1);
-      
-      const newAnimatedScores = animatedScores.map((startScore, index) => {
-        const targetScore = targetScores[index] || 0;
-        const diff = targetScore - startScore;
-        return Math.floor(startScore + diff * progress);
-      });
-      
-      setAnimatedScores(newAnimatedScores);
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
+    // Find which players scored
+    targetScores.forEach((score, index) => {
+      if (score > oldScores[index]) {
+        scoringPlayers.push(index);
       }
+    });
+    
+    if (scoringPlayers.length === 0) {
+      // No one scored, show button immediately
+      setShowNextRoundButton(true);
+      return;
+    }
+    
+    let currentPlayerIndex = 0;
+    
+    const animateNextPlayer = () => {
+      if (currentPlayerIndex >= scoringPlayers.length) {
+        // All players animated, wait 0.5s then show button
+        setTimeout(() => {
+          setShowNextRoundButton(true);
+        }, 500);
+        return;
+      }
+      
+      const playerIndex = scoringPlayers[currentPlayerIndex];
+      const startScore = oldScores[playerIndex];
+      const targetScore = targetScores[playerIndex];
+      let frameCount = 0;
+      const totalFrames = 30; // Count up over 0.5 seconds
+      
+      const animate = () => {
+        frameCount++;
+        const progress = Math.min(frameCount / totalFrames, 1);
+        const currentScore = Math.floor(startScore + (targetScore - startScore) * progress);
+        
+        setAnimatedScores(prev => {
+          const newScores = [...prev];
+          newScores[playerIndex] = currentScore;
+          return newScores;
+        });
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Wait 0.5s before animating next player
+          currentPlayerIndex++;
+          setTimeout(animateNextPlayer, 500);
+        }
+      };
+      
+      requestAnimationFrame(animate);
     };
     
-    requestAnimationFrame(animate);
-  }, [showNextRound, matchScores]);
+    // Wait 0.5s before starting first animation
+    setTimeout(animateNextPlayer, 500);
+  }, [showNextRound]);
   
   const drawCharacterPreviews = () => {
     setTimeout(() => {
@@ -2897,10 +2935,12 @@ export const Game = () => {
       });
     }
     setScoreInfo(info);
-    setMatchScores([...gameStateRef.current.matchScores]);
     
-    // Initialize animated scores from previous match scores
+    // Set animated scores to current scores (before this round's points)
     setAnimatedScores([...matchScores]);
+    // Update match scores to new scores (with this round's points)
+    setMatchScores([...gameStateRef.current.matchScores]);
+    setShowNextRoundButton(false);
     setShowNextRound(true);
   };
   const endGame = () => {
@@ -3240,12 +3280,14 @@ export const Game = () => {
                   <span className="font-bold text-2xl">{animatedScores[i] !== undefined ? animatedScores[i] : info.score}</span>
                 </div>)}
             </div>
-            <Button onClick={() => {
-          setShowNextRound(false);
-          resetRound();
-        }} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl">
-              Next Round
-            </Button>
+            {showNextRoundButton && (
+              <Button onClick={() => {
+                setShowNextRound(false);
+                resetRound();
+              }} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full text-xl">
+                Next Round
+              </Button>
+            )}
           </div>
         </div>}
     </div>;
