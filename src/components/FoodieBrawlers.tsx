@@ -1263,23 +1263,60 @@ class Player {
       boomerangs.push(new Boomerang(this.x + this.width / 2, this.y + this.height / 2, this.lastAimDir.x, this.lastAimDir.y, this));
     }
     
-    // If no line of sight, find an alternative target position to navigate around obstacles
+    // If no line of sight, intelligently find the quickest route to achieve line of sight
     if (!hasLineOfSight && enemyTarget && closestEnemyDist < 400) {
-      // Instead of rushing directly at enemy, try to navigate to a position with line of sight
-      // Try moving perpendicular to the direct path to find a way around
-      const perpX = -distY / distance; // Perpendicular direction
-      const perpY = distX / distance;
+      const enemyCenterX = enemyTarget.x + enemyTarget.width / 2;
+      const enemyCenterY = enemyTarget.y + enemyTarget.height / 2;
       
-      // Alternate between trying to go left and right around obstacle
-      const sideMultiplier = Math.floor(Date.now() / 1000) % 2 === 0 ? 1 : -1;
-      const searchX = (distX / distance * 0.6) + (perpX * 0.4 * sideMultiplier);
-      const searchY = (distY / distance * 0.6) + (perpY * 0.4 * sideMultiplier);
+      // Search for positions around the bot that would give line of sight
+      const searchRadius = 150; // How far to look for vantage points
+      const searchAngles = 16; // Check 16 directions
+      let bestPosition = null;
+      let bestDistance = Infinity;
       
-      this.botMoveTarget = {
-        x: searchX,
-        y: searchY
-      };
-      this.botStateTimer = 100; // Short timer to keep trying this path
+      for (let i = 0; i < searchAngles; i++) {
+        const angle = (i / searchAngles) * Math.PI * 2;
+        const testX = this.x + Math.cos(angle) * searchRadius;
+        const testY = this.y + Math.sin(angle) * searchRadius;
+        
+        // Check if this position has line of sight to enemy
+        const hasLOS = this.hasLineOfSightFromPoint(testX, testY, enemyCenterX, enemyCenterY, obstacles);
+        
+        if (hasLOS) {
+          // Calculate distance from current position to this vantage point
+          const dist = Math.hypot(testX - this.x, testY - this.y);
+          if (dist < bestDistance) {
+            bestDistance = dist;
+            bestPosition = { x: testX, y: testY };
+          }
+        }
+      }
+      
+      // If we found a good position, navigate towards it
+      if (bestPosition) {
+        const toPositionX = bestPosition.x - this.x;
+        const toPositionY = bestPosition.y - this.y;
+        const toPositionDist = Math.hypot(toPositionX, toPositionY);
+        
+        if (toPositionDist > 0) {
+          this.botMoveTarget = {
+            x: toPositionX / toPositionDist,
+            y: toPositionY / toPositionDist
+          };
+          this.botStateTimer = 100;
+        }
+      } else {
+        // Fallback: move perpendicular to find a way around
+        const perpX = -distY / distance;
+        const perpY = distX / distance;
+        const sideMultiplier = Math.floor(Date.now() / 1000) % 2 === 0 ? 1 : -1;
+        
+        this.botMoveTarget = {
+          x: (distX / distance * 0.5) + (perpX * 0.5 * sideMultiplier),
+          y: (distY / distance * 0.5) + (perpY * 0.5 * sideMultiplier)
+        };
+        this.botStateTimer = 80;
+      }
     }
 
     // Hard bots block incoming boomerangs with prediction
@@ -1333,6 +1370,32 @@ class Player {
       const t = i / steps;
       const checkX = startX + dx * t;
       const checkY = startY + dy * t;
+      
+      // Check if this point is inside any obstacle
+      for (const obstacle of obstacles) {
+        if (checkX >= obstacle.x && checkX <= obstacle.x + obstacle.width &&
+            checkY >= obstacle.y && checkY <= obstacle.y + obstacle.height) {
+          return false; // Line of sight blocked
+        }
+      }
+    }
+    return true; // Clear line of sight
+  }
+  
+  // Check if there's a clear line of sight from a specific point to target (no obstacles blocking)
+  hasLineOfSightFromPoint(fromX: number, fromY: number, targetX: number, targetY: number, obstacles: Obstacle[]): boolean {
+    const dx = targetX - fromX;
+    const dy = targetY - fromY;
+    const distance = Math.hypot(dx, dy);
+    
+    if (distance === 0) return true;
+    
+    // Check multiple points along the line
+    const steps = Math.ceil(distance / 10); // Check every 10 pixels
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const checkX = fromX + dx * t;
+      const checkY = fromY + dy * t;
       
       // Check if this point is inside any obstacle
       for (const obstacle of obstacles) {
